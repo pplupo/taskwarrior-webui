@@ -143,6 +143,7 @@
 
 			<template v-slot:item.id="{ item }">
 				<span class="font-weight-bold primary--text">#{{ getTaskId(item) }}</span>
+				<span v-if="getShortUuid(item)" class="caption text--secondary ml-1">({{ getShortUuid(item) }})</span>
 			</template>
 
 			<template v-slot:item.depends="{ item }">
@@ -515,8 +516,11 @@ export default defineComponent({
 
 		const getTaskId = (t: any) => {
 			if (t.id !== undefined && t.id !== null && t.id !== 0) return t.id;
-			if (t.uuid) return t.uuid.substring(0, 8);
 			return '-';
+		};
+
+		const getShortUuid = (t: any) => {
+			return t.uuid ? t.uuid.substring(0, 8) : '';
 		};
 
 		const taskUuidToIdMap = computed(() => {
@@ -556,6 +560,7 @@ export default defineComponent({
 			activeTaskUuid,
 			toggleTimer,
 			getTaskId,
+			getShortUuid,
 			formatDepends,
 			getDependents,
 			copyTag,

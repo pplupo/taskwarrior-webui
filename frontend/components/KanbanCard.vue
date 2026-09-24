@@ -1,7 +1,7 @@
 <template>
 	<v-card class="ma-2 kanban-card" elevation="2" :class="{ 'active-border': isActive }">
 		<v-card-subtitle class="pb-1 pt-2 d-flex align-center">
-			<span class="caption font-weight-bold primary--text mr-2">#{{ getTaskId(task) }}</span>
+			<span class="caption font-weight-bold primary--text mr-2">#{{ getTaskId(task) }} ({{ getShortUuid(task) }})</span>
 			<v-chip v-if="isActive" x-small color="success" dark class="font-weight-bold mr-1">
 				<v-icon left x-small>mdi-clock-fast</v-icon>{{ elapsedTimeDisplay }}
 			</v-chip>
@@ -147,8 +147,11 @@ export default defineComponent({
 
 		const getTaskId = (t: any) => {
 			if (t.id !== undefined && t.id !== null && t.id !== 0) return t.id;
-			if (t.uuid) return t.uuid.substring(0, 8);
 			return '-';
+		};
+
+		const getShortUuid = (t: any) => {
+			return t.uuid ? t.uuid.substring(0, 8) : '';
 		};
 
 		const taskUuidToIdMap = computed(() => {
@@ -190,6 +193,7 @@ export default defineComponent({
 			priorityColor,
 			linkify,
 			getTaskId,
+			getShortUuid,
 			formatDepends,
 			getDependents
 		};

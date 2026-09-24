@@ -6,8 +6,17 @@
 		@keydown.esc="closeDialog"
 	>
 		<v-card>
-			<v-card-title>
-				{{ task ? 'Edit Task' : 'New Task' }}
+			<v-card-title class="d-flex align-center">
+				<span>{{ task ? 'Edit Task' : 'New Task' }}</span>
+				<v-spacer />
+				<template v-if="task">
+					<v-chip small color="primary" class="mr-2 font-weight-bold" outlined>
+						#{{ getTaskId(task) }}
+					</v-chip>
+					<v-chip small color="grey" dark outlined :title="task.uuid">
+						{{ getShortUuid(task) }}
+					</v-chip>
+				</template>
 			</v-card-title>
 			<v-card-text>
 				<v-form ref="formRef" lazy-validation>
@@ -276,7 +285,18 @@ export default defineComponent({
 			{ text: 'High', value: 'H' }
 		];
 
+		const getTaskId = (t: any) => {
+			if (t && t.id !== undefined && t.id !== null && t.id !== 0) return t.id;
+			return '-';
+		};
+
+		const getShortUuid = (t: any) => {
+			return (t && t.uuid) ? t.uuid.substring(0, 8) : '';
+		};
+
 		return {
+			getTaskId,
+			getShortUuid,
 			requiredRules,
 			formRef,
 			tags,
