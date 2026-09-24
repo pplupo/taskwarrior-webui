@@ -22,6 +22,7 @@
 								v-for="task in col.tasks"
 								:key="task.uuid"
 								:task="task"
+								:all-tasks="tasks"
 								:active-task-uuid="activeTaskUuid"
 								@toggle-timer="$emit('toggle-timer', $event)"
 								@complete="$emit('complete', $event)"

@@ -1,7 +1,7 @@
 <template>
 	<v-card class="ma-2 kanban-card" elevation="2" :class="{ 'active-border': isActive }">
 		<v-card-subtitle class="pb-1 pt-2 d-flex align-center">
-			<span class="caption font-weight-bold primary--text mr-2">#{{ task.id || '0' }}</span>
+			<span class="caption font-weight-bold primary--text mr-2">#{{ getTaskId(task) }}</span>
 			<v-chip v-if="isActive" x-small color="success" dark class="font-weight-bold mr-1">
 				<v-icon left x-small>mdi-clock-fast</v-icon>{{ elapsedTimeDisplay }}
 			</v-chip>
@@ -29,8 +29,11 @@
 				<v-chip v-for="tag in task.tags" :key="tag" x-small color="grey darken-1" dark class="mr-1 mb-1">
 					+{{ tag }}
 				</v-chip>
-				<v-chip v-if="task.depends" x-small color="warning" dark class="mr-1 mb-1" :title="'Blocked by: ' + task.depends">
-					<v-icon left x-small>mdi-lock-outline</v-icon>BLOCKED ({{ task.depends }})
+				<v-chip v-if="task.depends" x-small color="warning" dark class="mr-1 mb-1" :title="'Blocked by: ' + formatDepends(task.depends)">
+					<v-icon left x-small>mdi-lock-outline</v-icon>BLOCKED ({{ formatDepends(task.depends) }})
+				</v-chip>
+				<v-chip v-if="getDependents(task)" x-small color="info" dark class="mr-1 mb-1" :title="'Blocking: ' + getDependents(task)">
+					<v-icon left x-small>mdi-account-arrow-right-outline</v-icon>BLOCKING ({{ getDependents(task) }})
 				</v-chip>
 				<v-chip v-if="task.recur" x-small color="info" dark class="mr-1 mb-1">
 					<v-icon left x-small>mdi-restart</v-icon>RECUR
@@ -94,6 +97,10 @@ export default defineComponent({
 			type: Object as () => Task,
 			required: true
 		},
+		allTasks: {
+			type: Array as () => Task[],
+			default: () => []
+		},
 		activeTaskUuid: {
 			type: String,
 			default: ''
@@ -138,11 +145,53 @@ export default defineComponent({
 			}
 		});
 
+		const getTaskId = (t: any) => {
+			if (t.id !== undefined && t.id !== null && t.id !== 0) return t.id;
+			if (t.uuid) return t.uuid.substring(0, 8);
+			return '-';
+		};
+
+		const taskUuidToIdMap = computed(() => {
+			const map: { [uuid: string]: string | number } = {};
+			for (const t of props.allTasks || []) {
+				if (t.uuid) {
+					map[t.uuid] = (t.id !== undefined && t.id !== null && t.id !== 0) ? t.id : t.uuid.substring(0, 8);
+				}
+			}
+			return map;
+		});
+
+		const formatDepends = (depends: any) => {
+			if (!depends) return '';
+			if (Array.isArray(depends)) {
+				return depends.map(uuid => taskUuidToIdMap.value[uuid] || uuid.substring(0, 8)).join(', ');
+			}
+			const uuids = String(depends).split(',');
+			return uuids.map(u => taskUuidToIdMap.value[u.trim()] || u.trim().substring(0, 8)).join(', ');
+		};
+
+		const getDependents = (task: any) => {
+			if (!task || !task.uuid) return '';
+			const dependents: string[] = [];
+			for (const t of props.allTasks || []) {
+				if (t.depends) {
+					const depList = Array.isArray(t.depends) ? t.depends : String(t.depends).split(',').map(s => s.trim());
+					if (depList.includes(task.uuid)) {
+						dependents.push(String(getTaskId(t)));
+					}
+				}
+			}
+			return dependents.join(', ');
+		};
+
 		return {
 			isActive,
 			elapsedTimeDisplay,
 			priorityColor,
-			linkify
+			linkify,
+			getTaskId,
+			formatDepends,
+			getDependents
 		};
 	}
 });

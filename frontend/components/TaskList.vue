@@ -141,6 +141,22 @@
 				<span v-html="linkify(item.description)" />
 			</template>
 
+			<template v-slot:item.id="{ item }">
+				<span class="font-weight-bold primary--text">#{{ getTaskId(item) }}</span>
+			</template>
+
+			<template v-slot:item.depends="{ item }">
+				<v-chip v-if="item.depends" x-small color="warning" dark :title="'Blocked by: ' + item.depends">
+					<v-icon left x-small>mdi-lock-outline</v-icon>{{ formatDepends(item.depends) }}
+				</v-chip>
+			</template>
+
+			<template v-slot:item.dependents="{ item }">
+				<v-chip v-if="getDependents(item)" x-small color="info" dark :title="'Blocking: ' + getDependents(item)">
+					<v-icon left x-small>mdi-account-arrow-right-outline</v-icon>{{ getDependents(item) }}
+				</v-chip>
+			</template>
+
 			<template v-if="status === 'waiting'" v-slot:item.wait="{ item }">
 				{{ displayDate(item.wait) }}
 			</template>
@@ -329,6 +345,7 @@ export default defineComponent({
 			recurring: 'mdi-restart'
 		};
 		const headers = computed(() => [
+			{ text: 'ID', value: 'id' },
 			{ text: 'Project', value: 'project' },
 			{ text: 'Description', value: 'description' },
 			{ text: 'Priority', value: 'priority' },
@@ -340,6 +357,8 @@ export default defineComponent({
 				? [{ text: 'Due', value: 'due' }]
 				: [{ text: 'Wait', value: 'wait' }]),
 			{ text: 'Until', value: 'until' },
+			{ text: 'Dependencies', value: 'depends' },
+			{ text: 'Dependents', value: 'dependents' },
 			{ text: 'Tags', value: 'tags' },
 			{ text: 'Urgency', value: 'urgency', sort: (a: number, b: number) => b - a },
 			{ text: 'Actions', value: 'actions', sortable: false }
@@ -494,9 +513,51 @@ export default defineComponent({
 			}
 		};
 
+		const getTaskId = (t: any) => {
+			if (t.id !== undefined && t.id !== null && t.id !== 0) return t.id;
+			if (t.uuid) return t.uuid.substring(0, 8);
+			return '-';
+		};
+
+		const taskUuidToIdMap = computed(() => {
+			const map: { [uuid: string]: string | number } = {};
+			for (const t of props.tasks || []) {
+				if (t.uuid) {
+					map[t.uuid] = (t.id !== undefined && t.id !== null && t.id !== 0) ? t.id : t.uuid.substring(0, 8);
+				}
+			}
+			return map;
+		});
+
+		const formatDepends = (depends: any) => {
+			if (!depends) return '';
+			if (Array.isArray(depends)) {
+				return depends.map(uuid => taskUuidToIdMap.value[uuid] || uuid.substring(0, 8)).join(', ');
+			}
+			const uuids = String(depends).split(',');
+			return uuids.map(u => taskUuidToIdMap.value[u.trim()] || u.trim().substring(0, 8)).join(', ');
+		};
+
+		const getDependents = (task: any) => {
+			if (!task || !task.uuid) return '';
+			const dependents: string[] = [];
+			for (const t of props.tasks || []) {
+				if (t.depends) {
+					const depList = Array.isArray(t.depends) ? t.depends : String(t.depends).split(',').map(s => s.trim());
+					if (depList.includes(task.uuid)) {
+						dependents.push(String(getTaskId(t)));
+					}
+				}
+			}
+			return dependents.join(', ');
+		};
+
 		return {
 			activeTaskUuid,
 			toggleTimer,
+			getTaskId,
+			formatDepends,
+			getDependents,
 			copyTag,
 			linkify,
 			refresh,
