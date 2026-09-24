@@ -137,6 +137,7 @@
 			</template>
 
 			<template v-slot:item.description="{ item }">
+				<span v-if="taskMnemonics.has(item.uuid)" class="mnemonic-badge mr-2">{{ taskMnemonics.get(item.uuid) }}</span>
 				<span v-html="linkify(item.description)" />
 			</template>
 
@@ -158,8 +159,18 @@
 					v-for="tag in item.tags"
 					:key="tag"
 					small
+					class="mr-1 mb-1"
 				>
 					{{ tag }}
+					<v-icon
+						right
+						x-small
+						class="ml-1"
+						title="Copy tag"
+						@click.stop="copyTag(tag)"
+					>
+						mdi-content-copy
+					</v-icon>
 				</v-chip>
 			</template>
 
@@ -168,6 +179,16 @@
 			</template>
 
 			<template v-slot:item.actions="{ item }">
+				<v-icon
+					v-show="status === 'pending'"
+					size="20px"
+					class="ml-2"
+					:color="item.start || item.uuid === activeTaskUuid ? 'warning' : 'success'"
+					@click="toggleTimer(item)"
+					:title="item.start || item.uuid === activeTaskUuid ? 'Stop Timer' : 'Start Timer'"
+				>
+					{{ item.start || item.uuid === activeTaskUuid ? 'mdi-stop' : 'mdi-play' }}
+				</v-icon>
 				<v-icon
 					v-show="status === 'pending'"
 					size="20px"
@@ -220,6 +241,7 @@ import moment from 'moment';
 import urlRegex from 'url-regex-safe';
 import normalizeUrl from 'normalize-url';
 import { accessorType  } from "../store";
+import { MnemonicGenerator } from '../utils/mnemonics';
 
 function displayDate(str?: string) {
 	if (!str)
@@ -262,6 +284,7 @@ function futureDate(str?: string) {
 }
 
 function linkify(text: string) {
+	if (!text) return '';
 	const regex = urlRegex();
 
 	let match;
@@ -269,7 +292,13 @@ function linkify(text: string) {
 	let result = '';
 	while ((match = regex.exec(text)) !== null) {
 		const str = text.substring(lastIndex, match.index);
-		const url = `<a target="_blank" href=${normalizeUrl(match[0])}>${match[0]}</a>`;
+		let href = match[0];
+		try {
+			href = normalizeUrl(match[0]);
+		} catch (e) {
+			// Fallback if normalizeUrl fails on pseudo-URL string
+		}
+		const url = `<a target="_blank" href="${href}">${match[0]}</a>`;
 		result = `${result}${str}${url}`;
 		lastIndex = match.index + match[0].length;
 	}
@@ -438,12 +467,43 @@ export default defineComponent({
 			return undefined;
 		};
 
+		const copyTag = (tag: string) => {
+			if (navigator.clipboard) {
+				navigator.clipboard.writeText(tag);
+			}
+			store.commit('setNotification', {
+				color: 'info',
+				text: `Tag "${tag}" copied to clipboard`
+			});
+		};
+
+		const mnemonicGen = new MnemonicGenerator();
+		const taskMnemonics = computed(() => {
+			mnemonicGen.reset();
+			const currentList = classifiedTasks[status.value]?.value || [];
+			return mnemonicGen.generateMap(currentList, (t) => t.uuid || '', (t) => t.description || '');
+		});
+
+		const activeTaskUuid = computed(() => store.state.activeTask?.uuid || '');
+
+		const toggleTimer = async (task: Task) => {
+			if (task.start || task.uuid === activeTaskUuid.value) {
+				await store.dispatch('stopTimer', task.uuid);
+			} else {
+				await store.dispatch('startTimer', task.uuid);
+			}
+		};
+
 		return {
+			activeTaskUuid,
+			toggleTimer,
+			copyTag,
 			linkify,
 			refresh,
 			headers,
 			filteredHeaders,
 			classifiedTasks,
+			taskMnemonics,
 			status,
 			allStatus,
 			statusIcons,
@@ -472,6 +532,17 @@ export default defineComponent({
 </script>
 
 <style>
+.v-data-table th .v-data-table-header__icon {
+  display: block !important;
+  margin-top: 4px !important;
+  margin-left: 0 !important;
+}
+
+.v-data-table th {
+  vertical-align: middle;
+  text-align: center;
+}
+
 .v-application tr.recur-task {
   background-color: #2196F333;
 }
@@ -482,5 +553,17 @@ export default defineComponent({
 
 .v-application tr.expired-task {
   background-color: #79554844;
+}
+
+.mnemonic-badge {
+  display: inline-block;
+  background-color: #e53935;
+  color: #ffffff;
+  font-weight: bold;
+  font-size: 0.75rem;
+  padding: 1px 5px;
+  border-radius: 3px;
+  text-transform: lowercase;
+  font-family: monospace;
 }
 </style>

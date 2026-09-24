@@ -1,6 +1,7 @@
 <template>
 	<v-app class="task-app">
 		<SettingsDialog v-model="settingsDialog" />
+		<UndoDialog v-model="showUndoDialog" />
 
 		<v-snackbar
 			v-model="snackbar"
@@ -25,9 +26,23 @@
 			<v-icon class="mr-2" color="blue">
 				mdi-sticker-check-outline
 			</v-icon>
-			<v-toolbar-title>
+			<v-toolbar-title class="mr-4">
 				Taskwarrior WebUI
 			</v-toolbar-title>
+			<v-text-field
+				id="cmdSearchBar"
+				ref="searchInputRef"
+				v-model="searchQuery"
+				dense
+				flat
+				solo-inverted
+				hide-details
+				prepend-inner-icon="mdi-magnify"
+				placeholder="Cmd Bar (Ctrl+Shift+K)"
+				style="max-width: 320px;"
+				class="mx-2"
+			/>
+			<ActiveTaskBar />
 			<v-spacer />
 			<v-icon class="mr-4" size="28px" @click="dark = !dark" title="Theme">
 				{{ dark ? 'mdi-brightness-4' : 'mdi-brightness-7' }}
@@ -51,8 +66,11 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, useContext, useStore, computed, onErrorCaptured, ref, watch } from '@nuxtjs/composition-api';
+import { defineComponent, useContext, useStore, computed, onErrorCaptured, ref, onMounted, onUnmounted } from '@nuxtjs/composition-api';
 import SettingsDialog from '../components/SettingsDialog.vue';
+import ActiveTaskBar from '../components/ActiveTaskBar.vue';
+import UndoDialog from '../components/UndoDialog.vue';
+import { HotkeyBus } from '../plugins/hotkeys';
 import { accessorType  } from "../store";
 
 export default defineComponent({
@@ -72,6 +90,32 @@ export default defineComponent({
 		});
 
 		const settingsDialog = ref(false);
+		const showUndoDialog = ref(false);
+		const searchQuery = ref('');
+		const searchInputRef = ref<any>(null);
+
+		const handleTriggerUndo = () => {
+			showUndoDialog.value = true;
+		};
+
+		onMounted(() => {
+			HotkeyBus.$on('trigger-undo', handleTriggerUndo);
+		});
+
+		onUnmounted(() => {
+			HotkeyBus.$off('trigger-undo', handleTriggerUndo);
+		});
+
+		if (process.client) {
+			window.addEventListener('keydown', (e: KeyboardEvent) => {
+				if (e.ctrlKey && e.shiftKey && (e.key === 'K' || e.key === 'k')) {
+					e.preventDefault();
+					if (searchInputRef.value && searchInputRef.value.focus) {
+						searchInputRef.value.focus();
+					}
+				}
+			});
+		}
 
 		const notification = computed(() => store.state.notification);
 		const snackbar = computed({
@@ -105,8 +149,13 @@ export default defineComponent({
 			snackbar,
 			notification,
 			settingsDialog,
+			showUndoDialog,
 
-			SettingsDialog
+			SettingsDialog,
+			ActiveTaskBar,
+			UndoDialog,
+			searchQuery,
+			searchInputRef
 		};
 	}
 });

@@ -25,6 +25,12 @@
 						label="Project"
 					/>
 					<v-combobox
+						v-model="formData.assignee"
+						:items="assignees"
+						hide-selected
+						label="Assignee"
+					/>
+					<v-combobox
 						v-model="formData.tags"
 						:items="tags"
 						hide-selected
@@ -81,6 +87,14 @@
 						/>
 					</v-radio-group>
 
+					<v-text-field
+						v-model="formData.customCommand"
+						label="Free-form Taskwarrior Modifiers"
+						placeholder="e.g. depends:123 priority:H due:tomorrow"
+						hint="Pass direct task modifier command fragments"
+						persistent-hint
+						class="mb-3"
+					/>
 					<v-list subheader dense flat>
 						<v-subheader>Annotations</v-subheader>
 						<v-list-item>
@@ -147,6 +161,7 @@ export default defineComponent({
 
 		const projects = computed(() => store.getters.projects);
 		const tags = computed(() => store.getters.tags);
+		const assignees = computed(() => store.getters.assignees);
 
 		const showDialog = computed({
 			get: () => props.value,
@@ -163,6 +178,7 @@ export default defineComponent({
 		const formData = ref({
 			description: '',
 			project: '',
+			assignee: (props.task as any)?.assignee || (props.task as any)?.assignees || '',
 			scheduled: '',
 			due: '',
 			until: '',
@@ -171,6 +187,7 @@ export default defineComponent({
 			annotations: [] as {entry: string; description: string}[],
 			priority: 'N',
 			recur: '',
+			customCommand: '',
 			...props.task
 		});
 
@@ -178,6 +195,7 @@ export default defineComponent({
 			formData.value = {
 				description: '',
 				project: '',
+				assignee: (props.task as any)?.assignee || (props.task as any)?.assignees || '',
 				scheduled: '',
 				due: '',
 				until: '',
@@ -186,6 +204,7 @@ export default defineComponent({
 				annotations: [] as {entry: string; description: string}[],
 				priority: 'N',
 				recur: '',
+				customCommand: '',
 				...props.task
 			};
 			recur.value = Boolean(props.task?.recur);
@@ -218,7 +237,7 @@ export default defineComponent({
 		const submit = async () => {
 			const valid = (formRef.value as any).validate();
 			if (valid) {
-				await store.dispatch('updateTasks', [{
+				const taskPayload = {
 					...formData.value,
 					annotations: formData.value.annotations || [],
 					project: formData.value.project || undefined,
@@ -228,7 +247,20 @@ export default defineComponent({
 					wait: formData.value.wait || undefined,
 					priority: formData.value.priority === 'N' ? undefined : formData.value.priority,
 					recur: recur.value ? formData.value.recur : undefined
-				}]);
+				};
+				await store.dispatch('updateTasks', [taskPayload]);
+
+				if (formData.value.customCommand && props.task?.uuid) {
+					try {
+						await (store as any).$axios.$post('/api/tasks/' + props.task.uuid + '/modify', {
+							command: formData.value.customCommand
+						});
+						await store.dispatch('fetchTasks');
+					} catch (e) {
+						console.error('Custom modifier command error', e);
+					}
+				}
+
 				store.commit('setNotification', {
 					color: 'success',
 					text: `Successfully ${props.task ? 'update' : 'create'} the task`
@@ -249,6 +281,7 @@ export default defineComponent({
 			formRef,
 			tags,
 			projects,
+			assignees,
 			priorities,
 			recur,
 			formData,

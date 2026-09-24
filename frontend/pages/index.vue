@@ -1,31 +1,27 @@
 <template>
 	<div class="px-md-6 px-lg-12">
-		<v-row class="px-4 pt-4">
+		<v-row class="px-4 pt-4 align-center">
 			<div class="headline d-flex align-center">{{ mode }}</div>
-			<template v-if="mode === 'Projects'">
-				<v-icon class="mx-2">
-					mdi-chevron-right
-				</v-icon>
+			
+			<v-select
+				class="mb-3 ml-4"
+				:items="projectOptions"
+				label="Project"
+				v-model="selectedProject"
+				style="max-width: 180px"
+				hide-details
+				dense
+			/>
 
-				<v-select
-					class="mb-3"
-					:items="projects"
-					label="Project"
-					v-model="project"
-					style="max-width: 120px"
-					hide-details
-				/>
-				<div class="ml-6 d-flex align-center">
-					<v-progress-circular
-						:size="54"
-						:width="5"
-						:value="progress"
-						color="primary"
-					>
-						{{ progress }}%
-					</v-progress-circular>
-				</div>
-			</template>
+			<v-select
+				class="mb-3 ml-3"
+				:items="assigneeOptions"
+				label="Assignee"
+				v-model="selectedAssignee"
+				style="max-width: 180px"
+				hide-details
+				dense
+			/>
 
 			<v-spacer />
 			<v-select
@@ -33,22 +29,42 @@
 				:items="allModes"
 				label="Display Mode"
 				v-model="mode"
-				style="max-width: 120px"
+				style="max-width: 140px"
 				hide-details
+				dense
 			/>
 		</v-row>
 
-		<TaskList :tasks="tasks" />
+		<KanbanBoard
+			v-if="mode === 'Kanban'"
+			:tasks="filteredTasks"
+			:active-task-uuid="activeTaskUuid"
+			@column-change="handleColumnChange"
+			@toggle-timer="handleToggleTimer"
+			@complete="handleCompleteTask"
+			@delete="handleDeleteTask"
+			@edit="handleEditTask"
+		/>
+		<TaskList v-else :tasks="filteredTasks" ref="taskListRef" />
+
+		<TaskDialog v-model="showTaskDialog" :task="editingTask || undefined" />
 	</div>
 </template>
 
 <script lang="ts">
 import { defineComponent, ref, computed, watch, ComputedRef, useStore, useContext } from '@nuxtjs/composition-api';
 import TaskList from '../components/TaskList.vue';
+import KanbanBoard from '../components/KanbanBoard.vue';
+import TaskDialog from '../components/TaskDialog.vue';
 import { Task } from 'taskwarrior-lib';
 import { accessorType  } from "../store";
 
 export default defineComponent({
+	components: {
+		TaskList,
+		KanbanBoard,
+		TaskDialog
+	},
 	setup() {
 		const store = useStore<typeof accessorType>();
 		const context = useContext();
@@ -90,50 +106,100 @@ export default defineComponent({
 		});
 
 		const mode = ref('Tasks');
-		const allModes = ['Tasks', 'Projects'];
+		const allModes = ['Tasks', 'Kanban'];
 
-		const project = ref('');
-		const projects: ComputedRef<string[]> = computed(() => store.getters.projects);
-		watch(projects, () => {
-			if (projects.value.includes(project.value))
-				return;
-			if (projects.value.length)
-				project.value = projects.value[0];
-			else
-				project.value = '';
-		});
+		const selectedProject = ref('(All Projects)');
+		const projects = computed(() => store.getters.projects);
+		const projectOptions = computed(() => ['(All Projects)', '(No Project)', ...projects.value]);
 
-		const tasks: ComputedRef<Task[]> = computed(() => {
-			if (mode.value === 'Tasks')
-				return store.state.tasks;
+		const selectedAssignee = ref('(All Assignees)');
+		const assignees = computed(() => store.getters.assignees);
+		const assigneeOptions = computed(() => ['(All Assignees)', '(Unassigned)', ...assignees.value]);
 
-			if (project.value)
-				return store.state.tasks.filter(
-					(task: Task) => task.project === project.value
-				);
+		const allTasks: ComputedRef<Task[]> = computed(() => store.state.tasks);
+		const activeTaskUuid = computed(() => store.state.activeTask?.uuid || '');
 
-			return [];
-		});
+		const filteredTasks = computed(() => {
+			let result = store.state.tasks || [];
 
-		const progress = computed(() => {
-			if (mode.value === 'Projects' && project.value) {
-				const completed = tasks.value.reduce((acc: number, task) => task.status === 'completed' ? acc + 1 : acc, 0);
-				const pending = tasks.value.reduce((acc: number, task) => task.status === 'pending' ? acc + 1 : acc, 0);
-				return completed + pending === 0
-					? 100
-					: Math.ceil(100 * completed / (completed + pending));
+			// Project filter
+			if (selectedProject.value === '(No Project)') {
+				result = result.filter(t => !t.project);
+			} else if (selectedProject.value && selectedProject.value !== '(All Projects)') {
+				result = result.filter(t => t.project === selectedProject.value);
 			}
-			return 0;
+
+			// Assignee filter
+			if (selectedAssignee.value === '(Unassigned)') {
+				result = result.filter(t => !(t as any).assignee && !(t as any).assignees);
+			} else if (selectedAssignee.value && selectedAssignee.value !== '(All Assignees)') {
+				result = result.filter(t => (t as any).assignee === selectedAssignee.value || (t as any).assignees === selectedAssignee.value);
+			}
+
+			return result;
 		});
+
+		const showTaskDialog = ref(false);
+		const editingTask = ref<Task | null>(null);
+
+		const handleEditTask = (task: Task) => {
+			editingTask.value = task;
+			showTaskDialog.value = true;
+		};
+
+		const handleCompleteTask = async (task: Task) => {
+			await store.dispatch('updateTasks', [{
+				...task,
+				status: 'completed'
+			}]);
+		};
+
+		const handleDeleteTask = async (task: Task) => {
+			await store.dispatch('deleteTasks', [task]);
+		};
+
+		const handleToggleTimer = async (task: Task) => {
+			if (task.start || task.uuid === activeTaskUuid.value) {
+				await store.dispatch('stopTimer', task.uuid);
+			} else {
+				await store.dispatch('startTimer', task.uuid);
+			}
+		};
+
+		const handleColumnChange = async ({ task, targetColumnId }: { task: Task; targetColumnId: string }) => {
+			if (targetColumnId === 'inProgress') {
+				await store.dispatch('startTimer', task.uuid);
+			} else if (targetColumnId === 'done') {
+				if (task.start || task.uuid === activeTaskUuid.value) {
+					await store.dispatch('stopTimer', task.uuid);
+				}
+				await store.dispatch('updateTasks', [{ ...task, status: 'completed' }]);
+			} else if (targetColumnId === 'todo') {
+				if (task.start || task.uuid === activeTaskUuid.value) {
+					await store.dispatch('stopTimer', task.uuid);
+				}
+				if (task.status === 'completed') {
+					await store.dispatch('updateTasks', [{ ...task, status: 'pending' }]);
+				}
+			}
+		};
 
 		return {
 			mode,
 			allModes,
-			TaskList,
-			tasks,
-			projects,
-			project,
-			progress
+			selectedProject,
+			projectOptions,
+			selectedAssignee,
+			assigneeOptions,
+			filteredTasks,
+			activeTaskUuid,
+			showTaskDialog,
+			editingTask,
+			handleEditTask,
+			handleCompleteTask,
+			handleDeleteTask,
+			handleToggleTimer,
+			handleColumnChange
 		};
 	}
 });
