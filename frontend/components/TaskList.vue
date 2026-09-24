@@ -142,8 +142,11 @@
 			</template>
 
 			<template v-slot:item.id="{ item }">
-				<span class="font-weight-bold primary--text">#{{ getTaskId(item) }}</span>
-				<span v-if="getShortUuid(item)" class="caption text--secondary ml-1">({{ getShortUuid(item) }})</span>
+				<span class="font-weight-bold primary--text">
+					<span v-if="item.id !== 0 && item.id !== undefined && item.id !== null">#{{ item.id }}</span>
+					<span v-else>#0</span>
+				</span>
+				<span v-if="item.uuid" class="caption text--secondary ml-1">({{ item.uuid.substring(0, 8) }})</span>
 			</template>
 
 			<template v-slot:item.depends="{ item }">

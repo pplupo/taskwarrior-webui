@@ -11,10 +11,11 @@
 				<v-spacer />
 				<template v-if="task">
 					<v-chip small color="primary" class="mr-2 font-weight-bold" outlined>
-						#{{ getTaskId(task) }}
+						<span v-if="task.id !== 0 && task.id !== undefined && task.id !== null">#{{ task.id }}</span>
+						<span v-else>#0</span>
 					</v-chip>
 					<v-chip small color="grey" dark outlined :title="task.uuid">
-						{{ getShortUuid(task) }}
+						{{ task.uuid ? task.uuid.substring(0, 8) : '' }}
 					</v-chip>
 				</template>
 			</v-card-title>

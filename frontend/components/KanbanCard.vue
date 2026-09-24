@@ -1,7 +1,11 @@
 <template>
 	<v-card class="ma-2 kanban-card" elevation="2" :class="{ 'active-border': isActive }">
 		<v-card-subtitle class="pb-1 pt-2 d-flex align-center">
-			<span class="caption font-weight-bold primary--text mr-2">#{{ getTaskId(task) }} ({{ getShortUuid(task) }})</span>
+			<span class="caption font-weight-bold primary--text mr-2">
+				<span v-if="task.id !== 0 && task.id !== undefined && task.id !== null">#{{ task.id }}</span>
+				<span v-else>#0</span>
+				({{ getShortUuid(task) }})
+			</span>
 			<v-chip v-if="isActive" x-small color="success" dark class="font-weight-bold mr-1">
 				<v-icon left x-small>mdi-clock-fast</v-icon>{{ elapsedTimeDisplay }}
 			</v-chip>
