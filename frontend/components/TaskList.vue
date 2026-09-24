@@ -515,7 +515,7 @@ export default defineComponent({
 		};
 
 		const getTaskId = (t: any) => {
-			if (t.id !== undefined && t.id !== null && t.id !== 0) return t.id;
+			if (t && t.id !== undefined && t.id !== null && Number(t.id) > 0) return t.id;
 			return '-';
 		};
 
