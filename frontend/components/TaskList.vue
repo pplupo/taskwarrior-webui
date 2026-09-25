@@ -207,6 +207,7 @@
 			<template v-slot:item.actions="{ item }">
 				<v-icon
 					v-show="status === 'pending'"
+					v-if="timewPresent"
 					size="20px"
 					class="ml-2"
 					:color="item.start || item.uuid === activeTaskUuid ? 'warning' : 'success'"
@@ -607,6 +608,7 @@ export default defineComponent({
 			confirmation,
 			displayDate,
 			rowClass,
+			timewPresent: computed(() => store.state.timewPresent),
 
 			TaskDialog,
 			ConfirmationDialog,

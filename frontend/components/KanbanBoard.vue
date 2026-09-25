@@ -2,7 +2,7 @@
 	<div class="kanban-board-container pa-4">
 		<v-row>
 			<v-col v-for="col in columns" :key="col.id" cols="12" sm="6" md="3">
-				<v-card class="column-card elevation-2" color="grey lighten-4">
+				<v-card class="column-card elevation-2" :color="$vuetify.theme.dark ? '#333333' : 'grey lighten-4'">
 					<v-card-title class="subtitle-1 font-weight-bold d-flex align-center py-2 px-3">
 						<v-icon left small :color="col.color">{{ col.icon }}</v-icon>
 						{{ col.title }}

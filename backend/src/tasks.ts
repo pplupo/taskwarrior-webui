@@ -3,7 +3,8 @@ import * as Router from '@koa/router';
 import taskwarrior from './taskwarrior';
 import { Task } from "taskwarrior-lib";
 
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
+import { parse } from 'shell-quote';
 
 const router = new Router();
 
@@ -26,6 +27,15 @@ router.get('/timew', async ctx => {
 		ctx.body = durationMap;
 	} catch (err) {
 		ctx.body = {};
+	}
+});
+
+router.get('/timew-status', async ctx => {
+	try {
+		execSync('timew --version');
+		ctx.body = { present: true };
+	} catch (e) {
+		ctx.body = { present: false };
 	}
 });
 
@@ -102,6 +112,62 @@ router.delete('/', async ctx => {
 	const msg = taskwarrior.del(tasks.map(t => ({ uuid: t })));
 	console.log(msg);
 	ctx.status = 200;
+});
+
+router.post('/command', async ctx => {
+	const body = ctx.request.body as { command: string; assignee?: string; project?: string };
+		const { command, assignee, project } = body;
+		
+		if (!command) {
+			ctx.status = 400;
+			ctx.body = { error: 'Command is required' };
+			return;
+		}
+
+		try {
+			const args = parse(command);
+			const stringArgs = args.filter((a): a is string => typeof a === 'string');
+			
+			if (stringArgs.length === 0) {
+				ctx.status = 400;
+				ctx.body = { error: 'Invalid command' };
+				return;
+			}
+
+			let executable = 'task';
+			if (stringArgs[0] === 'timew' || stringArgs[0] === 'task') {
+				executable = stringArgs[0];
+				stringArgs.shift();
+			}
+			
+			if (executable === 'task') {
+				const isCreation = stringArgs.includes('add') || stringArgs.includes('log');
+				if (assignee) {
+					stringArgs.push(`assignee:${assignee}`);
+				}
+				if (isCreation && project) {
+					stringArgs.push(`project:${project}`);
+				}
+				stringArgs.unshift('rc.confirmation=off', 'rc.bulk=0');
+			} else if (executable === 'timew') {
+				stringArgs.push(':yes');
+			}
+
+		// Allow testing locally if TASKRC/TASKDATA are passed as env
+		const env = { ...process.env };
+		
+		// Run command
+		const output = execFileSync(executable, stringArgs, { encoding: 'utf-8', env });
+		ctx.status = 200;
+		ctx.body = { output };
+	} catch (error: any) {
+		ctx.status = 500;
+		ctx.body = { 
+			error: error.message || String(error), 
+			stdout: error.stdout?.toString(),
+			stderr: error.stderr?.toString()
+		};
+	}
 });
 
 export default router;

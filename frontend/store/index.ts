@@ -16,7 +16,8 @@ export const state = () => ({
 		autoSync: '0', // in minutes
 		assigneeName: ''
 	},
-	hiddenColumns: [] as string[]
+	hiddenColumns: [] as string[],
+	timewPresent: true
 });
 
 export type RootState = ReturnType<typeof state>;
@@ -54,10 +55,22 @@ export const mutations: MutationTree<RootState> = {
 
 	setSnackbar(state, value) {
 		state.snackbar = value;
+	},
+
+	setTimewPresent(state, present: boolean) {
+		state.timewPresent = present;
 	}
 };
 
 export const actions: ActionTree<RootState, RootState> = {
+	async fetchTimewStatus(context) {
+		try {
+			const { present } = await this.$axios.$get('/api/tasks/timew-status');
+			context.commit('setTimewPresent', present);
+		} catch (e) {
+			context.commit('setTimewPresent', false);
+		}
+	},
 	fetchSettings(context) {
 		const settings = localStorage.getItem('settings');
 		if (settings) {
