@@ -1,6 +1,7 @@
 FROM alpine:3.20
 
-RUN apk --no-cache add nodejs npm nginx python3 build-base bash task \
+RUN apk --no-cache add nodejs npm nginx python3 build-base bash \
+ && apk --no-cache add --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community task3 \
  && (apk --no-cache add timewarrior || apk --no-cache add --repository=https://dl-cdn.alpinelinux.org/alpine/edge/testing timewarrior || true)
 
 COPY ./frontend /src/frontend
