@@ -19,7 +19,12 @@ Responsive Web UI for Taskwarrior based on Vue.js and Koa.js.
 * Support for multiple types of tasks
 * Support for light and dark themes
 * Sync with a taskserver
-
+* Kanban Board view with drag-and-drop status transitions
+* Timewarrior integration (start/stop tracking via Active tasks)
+* Inline snooze functionality for moving tasks to waiting
+* Keyboard-accessible Search bar (Ctrl+Shift+K)
+* Enhanced Task visualization (Colored priority chips, Urgency scoring)
+* Task annotations and dependency tracking UI
 
 ## Deployment
 
