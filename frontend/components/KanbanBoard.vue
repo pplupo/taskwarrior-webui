@@ -89,7 +89,7 @@ export default defineComponent({
 			doneTasks.value = done;
 		};
 
-		watch(() => props.tasks, categorizeTasks, { immediate: true });
+		watch([() => props.tasks, () => props.activeTaskUuid], categorizeTasks, { immediate: true });
 
 		const columns = computed(() => [
 			{ id: 'todo', title: 'To Do', color: 'blue', icon: 'mdi-clock-outline', tasks: todoTasks.value },

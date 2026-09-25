@@ -96,9 +96,9 @@ export default defineComponent({
 
 		const confirm = () => {
 			if (isValid.value) {
-				// Convert local datetime to UTC ISO string for Taskwarrior
-				const isoString = moment(customDatetime.value).toISOString();
-				emit('confirm', isoString);
+				// Convert local datetime to UTC ISO string for Taskwarrior (YYYYMMDDTHHMMSSZ)
+				const twDateString = moment(customDatetime.value).utc().format('YYYYMMDD[T]HHmmss[Z]');
+				emit('confirm', twDateString);
 			}
 		};
 

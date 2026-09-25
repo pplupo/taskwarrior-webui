@@ -38,7 +38,7 @@
 				solo-inverted
 				hide-details
 				prepend-inner-icon="mdi-magnify"
-				placeholder="Cmd Bar (Ctrl+Shift+K)"
+				placeholder="Search bar (Ctrl+Shift+K)"
 				style="max-width: 320px;"
 				class="mx-2"
 			/>

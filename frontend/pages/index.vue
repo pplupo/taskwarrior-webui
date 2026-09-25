@@ -201,39 +201,55 @@ export default defineComponent({
 		};
 
 		const handleColumnChange = async ({ task, targetColumnId }: { task: Task; targetColumnId: string }) => {
-			if (targetColumnId === 'inProgress') {
-				await store.dispatch('startTimer', task.uuid);
-			} else if (targetColumnId === 'done') {
-				if (task.start || task.uuid === activeTaskUuid.value) {
-					await store.dispatch('stopTimer', task.uuid);
+			try {
+				if (targetColumnId === 'inProgress') {
+					await store.dispatch('startTimer', task.uuid);
+				} else if (targetColumnId === 'done') {
+					if (task.start || task.uuid === activeTaskUuid.value) {
+						await store.dispatch('stopTimer', task.uuid);
+					}
+					const payload = { ...task, status: 'completed' };
+					if (payload.start) delete payload.start;
+					await store.dispatch('updateTasks', [payload]);
+				} else if (targetColumnId === 'todo') {
+					if (task.start || task.uuid === activeTaskUuid.value) {
+						await store.dispatch('stopTimer', task.uuid);
+					}
+					if (task.status === 'completed' || task.wait || task.scheduled) {
+						const updatedTask = { ...task, status: 'pending' };
+						if (updatedTask.wait) delete updatedTask.wait;
+						if (updatedTask.scheduled) delete updatedTask.scheduled;
+						if (updatedTask.start) delete updatedTask.start;
+						await store.dispatch('updateTasks', [updatedTask]);
+					}
+				} else if (targetColumnId === 'waiting') {
+					taskToSnooze.value = task;
+					showSnoozeDialog.value = true;
 				}
-				await store.dispatch('updateTasks', [{ ...task, status: 'completed' }]);
-			} else if (targetColumnId === 'todo') {
-				if (task.start || task.uuid === activeTaskUuid.value) {
-					await store.dispatch('stopTimer', task.uuid);
-				}
-				if (task.status === 'completed') {
-					await store.dispatch('updateTasks', [{ ...task, status: 'pending' }]);
-				}
-			} else if (targetColumnId === 'waiting') {
-				taskToSnooze.value = task;
-				showSnoozeDialog.value = true;
+			} catch (e) {
+				console.error('Error changing task column:', e);
+				await store.dispatch('fetchTasks');
 			}
 		};
 
 		const handleSnoozeConfirm = async (waitDate: string) => {
-			if (taskToSnooze.value) {
-				if (taskToSnooze.value.start || taskToSnooze.value.uuid === activeTaskUuid.value) {
-					await store.dispatch('stopTimer', taskToSnooze.value.uuid);
-				}
-				await store.dispatch('updateTasks', [{ 
-					...taskToSnooze.value, 
-					status: 'waiting', 
-					wait: waitDate 
-				}]);
-			}
+			const targetTask = taskToSnooze.value;
 			showSnoozeDialog.value = false;
 			taskToSnooze.value = null;
+
+			if (targetTask) {
+				try {
+					if (targetTask.start || targetTask.uuid === activeTaskUuid.value) {
+						await store.dispatch('stopTimer', targetTask.uuid);
+					}
+					const payload = { ...targetTask, status: 'pending', wait: waitDate };
+					if (payload.start) delete payload.start;
+					await store.dispatch('updateTasks', [payload]);
+				} catch (e) {
+					console.error('Error snoozing task:', e);
+					await store.dispatch('fetchTasks');
+				}
+			}
 		};
 
 		const handleSnoozeCancel = () => {

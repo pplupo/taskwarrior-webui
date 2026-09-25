@@ -10,7 +10,7 @@
 				<v-icon left x-small>mdi-clock-fast</v-icon>{{ elapsedTimeDisplay }}
 			</v-chip>
 			<v-spacer />
-			<v-chip v-if="task.priority" x-small :color="priorityColor" dark class="mr-1">
+			<v-chip v-if="task.priority" x-small :color="priorityColor" dark class="priority-chip mr-1">
 				{{ task.priority }}
 			</v-chip>
 			<v-chip x-small color="grey lighten-2" class="caption">
@@ -215,5 +215,8 @@ export default defineComponent({
 }
 .active-border {
 	border: 2px solid #4CAF50 !important;
+}
+.priority-chip {
+	font-weight: bold !important;
 }
 </style>

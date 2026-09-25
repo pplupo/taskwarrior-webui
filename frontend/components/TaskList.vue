@@ -161,6 +161,12 @@
 				</v-chip>
 			</template>
 
+			<template v-slot:item.priority="{ item }">
+				<v-chip v-if="item.priority" x-small :color="getPriorityColor(item.priority)" dark class="priority-chip mr-1">
+					{{ item.priority }}
+				</v-chip>
+			</template>
+
 			<template v-if="status === 'waiting'" v-slot:item.wait="{ item }">
 				{{ displayDate(item.wait) }}
 			</template>
@@ -430,6 +436,15 @@ export default defineComponent({
 			currentTask.value = null;
 		};
 
+		const getPriorityColor = (priority?: string) => {
+			switch (priority) {
+				case 'H': return 'red';
+				case 'M': return 'orange';
+				case 'L': return 'blue';
+				default: return 'grey';
+			}
+		};
+
 		const editTask = (task: Task) => {
 			showTaskDialog.value = true;
 			currentTask.value = _.cloneDeep(task);
@@ -583,6 +598,7 @@ export default defineComponent({
 			currentTask,
 			editTask,
 			deleteTasks,
+			getPriorityColor,
 			completeTasks,
 			restoreTasks,
 			showTaskDialog,
