@@ -52,7 +52,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed, watch, ComputedRef, useStore, useContext } from '@nuxtjs/composition-api';
+import { defineComponent, ref, computed, watch, ComputedRef, useStore, useContext, useRoute, useRouter } from '@nuxtjs/composition-api';
 import TaskList from '../components/TaskList.vue';
 import KanbanBoard from '../components/KanbanBoard.vue';
 import TaskDialog from '../components/TaskDialog.vue';
@@ -68,6 +68,9 @@ export default defineComponent({
 	setup() {
 		const store = useStore<typeof accessorType>();
 		const context = useContext();
+		const route = useRoute();
+		const router = useRouter();
+
 		store.dispatch('fetchTasks');
 
 		// Auto Refresh
@@ -105,16 +108,41 @@ export default defineComponent({
 			context.$vuetify.theme.dark = store.state.settings.dark;
 		});
 
-		const mode = ref('Tasks');
+		const mode = ref((route.value.query.mode as string) || 'Tasks');
 		const allModes = ['Tasks', 'Kanban'];
 
-		const selectedProject = ref('(All Projects)');
+		const selectedProject = ref((route.value.query.project as string) || '(All Projects)');
 		const projects = computed(() => store.getters.projects);
 		const projectOptions = computed(() => ['(All Projects)', '(No Project)', ...projects.value]);
 
-		const selectedAssignee = ref('(All Assignees)');
+		const selectedAssignee = ref((route.value.query.assignee as string) || '(All Assignees)');
 		const assignees = computed(() => store.getters.assignees);
 		const assigneeOptions = computed(() => ['(All Assignees)', '(Unassigned)', ...assignees.value]);
+
+		watch([mode, selectedProject, selectedAssignee], ([newMode, newProject, newAssignee]) => {
+			const query: Record<string, string> = { ...(route.value.query as Record<string, string>) };
+			if (newMode !== 'Tasks') query.mode = newMode;
+			else delete query.mode;
+
+			if (newProject !== '(All Projects)') query.project = newProject;
+			else delete query.project;
+
+			if (newAssignee !== '(All Assignees)') query.assignee = newAssignee;
+			else delete query.assignee;
+
+			router.replace({ query }).catch(() => {});
+		});
+
+		watch(() => route.value.query, (newQuery) => {
+			if (newQuery.mode && newQuery.mode !== mode.value) mode.value = newQuery.mode as string;
+			if (!newQuery.mode && mode.value !== 'Tasks') mode.value = 'Tasks';
+
+			if (newQuery.project && newQuery.project !== selectedProject.value) selectedProject.value = newQuery.project as string;
+			if (!newQuery.project && selectedProject.value !== '(All Projects)') selectedProject.value = '(All Projects)';
+
+			if (newQuery.assignee && newQuery.assignee !== selectedAssignee.value) selectedAssignee.value = newQuery.assignee as string;
+			if (!newQuery.assignee && selectedAssignee.value !== '(All Assignees)') selectedAssignee.value = '(All Assignees)';
+		}, { deep: true });
 
 		const allTasks: ComputedRef<Task[]> = computed(() => store.state.tasks);
 		const activeTaskUuid = computed(() => store.state.activeTask?.uuid || '');
