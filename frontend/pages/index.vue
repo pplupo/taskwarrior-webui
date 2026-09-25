@@ -48,6 +48,7 @@
 		<TaskList v-else :tasks="filteredTasks" ref="taskListRef" />
 
 		<TaskDialog v-model="showTaskDialog" :task="editingTask || undefined" />
+		<SnoozeDialog v-model="showSnoozeDialog" @confirm="handleSnoozeConfirm" @cancel="handleSnoozeCancel" />
 	</div>
 </template>
 
@@ -56,6 +57,7 @@ import { defineComponent, ref, computed, watch, ComputedRef, useStore, useContex
 import TaskList from '../components/TaskList.vue';
 import KanbanBoard from '../components/KanbanBoard.vue';
 import TaskDialog from '../components/TaskDialog.vue';
+import SnoozeDialog from '../components/SnoozeDialog.vue';
 import { Task } from 'taskwarrior-lib';
 import { accessorType  } from "../store";
 
@@ -63,7 +65,8 @@ export default defineComponent({
 	components: {
 		TaskList,
 		KanbanBoard,
-		TaskDialog
+		TaskDialog,
+		SnoozeDialog
 	},
 	setup() {
 		const store = useStore<typeof accessorType>();
@@ -170,6 +173,9 @@ export default defineComponent({
 		const showTaskDialog = ref(false);
 		const editingTask = ref<Task | null>(null);
 
+		const showSnoozeDialog = ref(false);
+		const taskToSnooze = ref<Task | null>(null);
+
 		const handleEditTask = (task: Task) => {
 			editingTask.value = task;
 			showTaskDialog.value = true;
@@ -209,7 +215,32 @@ export default defineComponent({
 				if (task.status === 'completed') {
 					await store.dispatch('updateTasks', [{ ...task, status: 'pending' }]);
 				}
+			} else if (targetColumnId === 'waiting') {
+				taskToSnooze.value = task;
+				showSnoozeDialog.value = true;
 			}
+		};
+
+		const handleSnoozeConfirm = async (waitDate: string) => {
+			if (taskToSnooze.value) {
+				if (taskToSnooze.value.start || taskToSnooze.value.uuid === activeTaskUuid.value) {
+					await store.dispatch('stopTimer', taskToSnooze.value.uuid);
+				}
+				await store.dispatch('updateTasks', [{ 
+					...taskToSnooze.value, 
+					status: 'waiting', 
+					wait: waitDate 
+				}]);
+			}
+			showSnoozeDialog.value = false;
+			taskToSnooze.value = null;
+		};
+
+		const handleSnoozeCancel = () => {
+			showSnoozeDialog.value = false;
+			taskToSnooze.value = null;
+			// Trigger a fresh fetch to reset the board columns back to actual state
+			store.dispatch('fetchTasks');
 		};
 
 		return {
@@ -223,11 +254,14 @@ export default defineComponent({
 			activeTaskUuid,
 			showTaskDialog,
 			editingTask,
+			showSnoozeDialog,
 			handleEditTask,
 			handleCompleteTask,
 			handleDeleteTask,
 			handleToggleTimer,
-			handleColumnChange
+			handleColumnChange,
+			handleSnoozeConfirm,
+			handleSnoozeCancel
 		};
 	}
 });
