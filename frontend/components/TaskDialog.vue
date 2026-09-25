@@ -12,7 +12,7 @@
 				<template v-if="task">
 					<v-chip small color="primary" class="mr-2 font-weight-bold" outlined>
 						<span v-if="task.id !== 0 && task.id !== undefined && task.id !== null">#{{ task.id }}</span>
-						<span v-else>#0</span>
+						<span v-else>#-</span>
 					</v-chip>
 					<v-chip small color="grey" dark outlined :title="task.uuid">
 						{{ task.uuid ? task.uuid.substring(0, 8) : '' }}

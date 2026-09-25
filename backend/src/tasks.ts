@@ -47,7 +47,14 @@ router.get('/active', async ctx => {
 
 router.post('/:uuid/start', async ctx => {
 	const uuid = ctx.params.uuid;
-	taskwarrior.executeCommand('stop +ACTIVE');
+	try {
+		const activeTasks = taskwarrior.load('+ACTIVE');
+		if (activeTasks && activeTasks.length > 0) {
+			taskwarrior.executeCommand('+ACTIVE stop');
+		}
+	} catch (e) {
+		console.warn('Failed to stop active tasks:', e);
+	}
 	const { assignee } = (ctx.request as any).body || {};
 	const assigneeMod = assignee ? ` assignee:${assignee}` : '';
 	const msg = taskwarrior.executeCommand("'" + uuid + "'" + ' start' + assigneeMod);

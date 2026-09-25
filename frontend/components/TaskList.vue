@@ -144,7 +144,7 @@
 			<template v-slot:item.id="{ item }">
 				<span class="font-weight-bold primary--text">
 					<span v-if="item.id !== 0 && item.id !== undefined && item.id !== null">#{{ item.id }}</span>
-					<span v-else>#0</span>
+					<span v-else>#-</span>
 				</span>
 				<span v-if="item.uuid" class="caption text--secondary ml-1">({{ item.uuid.substring(0, 8) }})</span>
 			</template>

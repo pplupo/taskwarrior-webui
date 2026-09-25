@@ -3,7 +3,7 @@
 		<v-card-subtitle class="pb-1 pt-2 d-flex align-center">
 			<span class="caption font-weight-bold primary--text mr-2">
 				<span v-if="task.id !== 0 && task.id !== undefined && task.id !== null">#{{ task.id }}</span>
-				<span v-else>#0</span>
+				<span v-else>#-</span>
 				({{ getShortUuid(task) }})
 			</span>
 			<v-chip v-if="isActive" x-small color="success" dark class="font-weight-bold mr-1">
