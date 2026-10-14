@@ -13,26 +13,32 @@
 						{{ z }}
 					</v-chip>
 				</v-chip-group>
-				<!-- Item 1: Status Filter Chip Group with Sync -->
-				<v-chip-group :value="selectedStatusIndex" @change="onStatusChange" active-class="primary--text" mandatory class="mr-4">
-					<v-chip v-for="st in statusOptions" :key="st" small label outline>
+				<!-- Reused status toggles matching TaskList -->
+				<v-btn-toggle v-model="selectedStatuses" multiple background-color="rgba(0, 0, 0, 0)" class="mr-4">
+					<v-btn
+						v-for="st in allStatus"
+						:key="st"
+						:value="st"
+						:color="selectedStatuses.includes(st) ? 'primary' : undefined"
+						text
+						small
+					>
+						<v-icon
+							small
+							class="mr-1"
+							:color="selectedStatuses.includes(st) ? 'primary' : undefined"
+						>
+							{{ statusIcons[st] }}
+						</v-icon>
 						{{ st }}
-					</v-chip>
-				</v-chip-group>
-				<!-- Task Name Search Box (Filter as you type) -->
-				<v-text-field
-					v-model="localSearch"
-					@input="onSearchInput"
-					@click:clear="onSearchClear"
-					prepend-inner-icon="mdi-magnify"
-					label="Search tasks..."
-					dense
-					outlined
-					hide-details
-					clearable
-					class="mr-4"
-					style="max-width: 220px;"
-				/>
+						<v-badge
+							v-if="st === 'pending' && ((classifiedTasks[st] && classifiedTasks[st].length) || (classifiedTasks[st] && classifiedTasks[st].value && classifiedTasks[st].value.length))"
+							:content="classifiedTasks[st].length || (classifiedTasks[st].value && classifiedTasks[st].value.length)"
+							:color="selectedStatuses.includes(st) ? 'primary' : 'grey'"
+							inline
+						/>
+					</v-btn>
+				</v-btn-toggle>
 				<v-spacer />
 				<div class="caption text--secondary mr-2">
 					<span class="mr-3"><v-icon small color="blue">mdi-square</v-icon> Pending</span>
@@ -259,8 +265,25 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed, watch, onMounted, onUnmounted } from '@nuxtjs/composition-api';
+import { defineComponent, ref, computed, watch, onMounted, onUnmounted, useRoute, useRouter, reactive, ComputedRef } from '@nuxtjs/composition-api';
 import { Task } from 'taskwarrior-lib';
+import moment from 'moment';
+
+function expiredDate(str?: string) {
+	if (!str)
+		return false;
+
+	const date = moment(str);
+	return date.isBefore(moment());
+}
+
+function futureDate(str?: string) {
+	if (!str)
+		return false;
+
+	const date = moment(str);
+	return date.isAfter(moment());
+}
 
 interface ProcessedTask {
 	task: Task;
@@ -296,14 +319,6 @@ export default defineComponent({
 		zoom: {
 			type: String,
 			default: 'Day'
-		},
-		statusFilter: {
-			type: String,
-			default: 'Active & Pending'
-		},
-		searchFilter: {
-			type: String,
-			default: ''
 		}
 	},
 	setup(props, ctx) {
@@ -326,40 +341,86 @@ export default defineComponent({
 			}
 		};
 
-		const statusOptions = ['Active & Pending', 'Completed', 'All (Excl. Deleted)'];
-		const selectedStatusIndex = computed(() => {
-			const idx = statusOptions.indexOf(props.statusFilter);
-			return idx >= 0 ? idx : 0;
-		});
+		const route = useRoute();
+		const router = useRouter();
 
-		const onStatusChange = (idx: number) => {
-			if (idx >= 0 && idx < statusOptions.length) {
-				ctx.emit('update:statusFilter', statusOptions[idx]);
+		const allStatus = ['pending', 'waiting', 'completed', 'deleted', 'recurring'];
+		const statusIcons: { [st: string]: string } = {
+			pending: 'mdi-clock-outline',
+			waiting: 'mdi-pause',
+			completed: 'mdi-check',
+			deleted: 'mdi-delete',
+			recurring: 'mdi-restart'
+		};
+
+		const parseStatusQuery = (queryVal: any): string[] => {
+			if (queryVal === undefined || queryVal === null) {
+				return ['pending'];
+			}
+			const str = String(queryVal).trim().toLowerCase();
+			if (!str || str === 'none') {
+				return [];
+			}
+			if (str === 'all') {
+				return [...allStatus];
+			}
+			const parts = str.split(',').map(s => s.trim().toLowerCase()).filter(s => allStatus.includes(s));
+			return parts;
+		};
+
+		const selectedStatuses = ref<string[]>(parseStatusQuery(route.value.query.status));
+
+		const updateStatusQuery = (statuses: string[]) => {
+			const currentQueryStatus = (route.value.query.status as string) || '';
+			const sorted = [...statuses].sort((a, b) => allStatus.indexOf(a) - allStatus.indexOf(b));
+			let serialized = '';
+			if (sorted.length === 0) {
+				serialized = 'none';
+			}
+			else {
+				serialized = sorted.join(',');
+			}
+
+			if (currentQueryStatus !== serialized) {
+				const query: Record<string, string> = { ...(route.value.query as Record<string, string>) };
+				if (serialized === 'pending' && !currentQueryStatus) {
+					return;
+				}
+				query.status = serialized;
+				router.replace({ query }).catch(() => {});
 			}
 		};
 
-		// Filter as you type: synchronous local search ref for instant reactivity
-		const localSearch = ref(props.searchFilter || '');
-		watch(() => props.searchFilter, (newVal) => {
-			if (newVal !== localSearch.value) {
-				localSearch.value = newVal || '';
-			}
+		const tempTasks: { [key: string]: ComputedRef<Task[]> } = {};
+		for (const status of allStatus) {
+			tempTasks[status] = computed((): Task[] => (props.tasks || []).filter(task => {
+				if (status === 'waiting' || status === 'pending') {
+					const waiting = (task.wait && !expiredDate(task.wait))
+						|| (task.scheduled && futureDate(task.scheduled));
+					return task.status === 'pending' && (status === 'pending' ? !waiting : waiting);
+				}
+				else if (status === 'pending') {
+					return task.status === 'pending' && !(task.wait && !expiredDate(task.wait));
+				}
+				else {
+					return task.status === status;
+				}
+			}));
+		}
+		const classifiedTasks = reactive(tempTasks);
+
+		watch(selectedStatuses, (newStatuses) => {
+			updateStatusQuery(newStatuses);
 		});
 
-		let searchDebounceTimer: any = null;
-		const onSearchInput = (val: string | null) => {
-			localSearch.value = val || '';
-			if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
-			searchDebounceTimer = setTimeout(() => {
-				ctx.emit('update:searchFilter', localSearch.value);
-			}, 300);
-		};
-
-		const onSearchClear = () => {
-			localSearch.value = '';
-			if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
-			ctx.emit('update:searchFilter', '');
-		};
+		watch(() => route.value.query.status, (newStatus) => {
+			const parsed = parseStatusQuery(newStatus);
+			const curSorted = [...selectedStatuses.value].sort().join(',');
+			const newSorted = [...parsed].sort().join(',');
+			if (curSorted !== newSorted) {
+				selectedStatuses.value = parsed;
+			}
+		});
 
 		// Item 2: Debounced hover state for stable delete button
 		const hoveredLinkId = ref<string | null>(null);
@@ -448,14 +509,10 @@ export default defineComponent({
 			return isNaN(parsed.getTime()) ? null : parsed;
 		};
 
-		const activeTasksList = computed(() => {
-			return (props.tasks || []).filter(t => t.status !== 'deleted');
-		});
-
-		// Map of all active tasks by UUID and by numeric ID for dependency lookups
+		// Map of all tasks by UUID and by numeric ID for dependency lookups
 		const allTasksMap = computed(() => {
 			const map = new Map<string, Task>();
-			activeTasksList.value.forEach(t => {
+			(props.tasks || []).forEach(t => {
 				if (t.uuid) map.set(t.uuid, t);
 				if (t.id !== undefined && t.id !== null) map.set(String(t.id), t);
 			});
@@ -465,7 +522,7 @@ export default defineComponent({
 		// Dependents count map (number of tasks that depend on this task)
 		const dependentsCountMap = computed(() => {
 			const countMap = new Map<string, number>();
-			activeTasksList.value.forEach(t => {
+			(props.tasks || []).forEach(t => {
 				if (t.depends) {
 					const deps = Array.isArray(t.depends) ? t.depends : String(t.depends).split(',');
 					deps.forEach(d => {
@@ -479,24 +536,22 @@ export default defineComponent({
 			return countMap;
 		});
 
-		// Filter tasks by status and text search
-		const filteredTasks = computed(() => {
-			let list = activeTasksList.value;
-
-			const filter = props.statusFilter;
-			if (filter === 'Completed') {
-				list = list.filter(t => t.status === 'completed');
+		// Filter tasks by selected statuses
+		const filteredTasks = computed((): Task[] => {
+			if (!props.tasks || !selectedStatuses.value || !selectedStatuses.value.length) return [];
+			const taskSet = new Set<string>();
+			const result: Task[] = [];
+			for (const st of selectedStatuses.value) {
+				const entry: any = classifiedTasks[st];
+				const list: Task[] = Array.isArray(entry) ? entry : (entry?.value || []);
+				for (const task of list) {
+					if (task.uuid && !taskSet.has(task.uuid)) {
+						taskSet.add(task.uuid);
+						result.push(task);
+					}
+				}
 			}
-			else if (filter === 'Active & Pending') {
-				list = list.filter(t => t.status !== 'completed');
-			}
-
-			const search = (localSearch.value || '').trim().toLowerCase();
-			if (search) {
-				list = list.filter(t => (t.description || '').toLowerCase().includes(search));
-			}
-
-			return list;
+			return result;
 		});
 
 		// Helper to strip time and set to 00:00:00.000 local
@@ -595,7 +650,7 @@ export default defineComponent({
 				return res;
 			};
 
-			activeTasksList.value.forEach(t => {
+			(props.tasks || []).forEach(t => {
 				resolveTask(t);
 			});
 
@@ -1435,9 +1490,10 @@ export default defineComponent({
 			zoomOptions,
 			selectedZoomIndex,
 			onZoomChange,
-			statusOptions,
-			selectedStatusIndex,
-			onStatusChange,
+			allStatus,
+			statusIcons,
+			selectedStatuses,
+			classifiedTasks,
 			hoveredLinkId,
 			onLinkMouseEnter,
 			onLinkMouseLeave,
@@ -1458,9 +1514,6 @@ export default defineComponent({
 			onMouseUp,
 			onBackgroundClick,
 			getTaskBarStyle,
-			localSearch,
-			onSearchInput,
-			onSearchClear,
 			getPriorityColor,
 			formatDate
 		};

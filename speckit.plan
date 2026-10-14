@@ -16,32 +16,16 @@
 - `GET /api/reports/burndown` & `GET /api/reports/projects`: Progress metrics.
 
 ### 2. Frontend Components & Store (`frontend/`)
-- Store additions: `activeTask`, `customQueries`, `undoPreview`, `activeViewMode` ('tasks' | 'kanban' | 'gantt'), `mnemonicsMap`.
-- Keyboard & Mnemonic Engine (`plugins/hotkeys.ts`): Shortcut handlers (`Ctrl+Shift+K`, `n`, `t`, `q`, `u`, `s`, `g`) with visual red-box overlays.
-- View Switcher: 3-way toggle between "Tasks" (Table), "Kanban" (Board), and "Gantt" (Timeline).
+- Store additions: `activeTask`, `customQueries`, `undoPreview`, `activeViewMode`, `mnemonicsMap`.
+- Keyboard & Mnemonic Engine (`plugins/hotkeys.ts`): Shortcut handlers (`Ctrl+Shift+K`, `n`, `t`, `q`, `u`, `s`) with visual red-box overlays.
 - Kanban View (`components/KanbanBoard.vue`, `components/KanbanCard.vue`): 4-column drag-and-drop layout (To Do, In Progress, Waiting, Done).
-- Gantt Chart View (`components/GanttChart.vue`): 
-  - Calendar date & duration resolution engine (`resolvedTaskDates`):
-    - Primary: `task.start`; fallback: `task.due`; fallback: latest completion of prerequisite tasks (`task.depends`); fallback: today.
-    - Inclusive duration spanning start to due date inclusive (or 1 day default).
-  - Calendarless "Sequence" View mode (`props.zoom = 'Sequence'`):
-    - Sequential step columns (`Step 1`, `Step 2`, ...) without calendar date labels.
-    - Starts strictly on the day of the earliest task at column 0, eliminating past buffer.
-  - 4-tier vertical task sorting engine (`sortedTasks`):
-    - Priority (`H` > `M` > `L` > none) -> urgency -> dependents count -> alphabetical.
-  - Real-time search filter engine (`localSearch`, `filteredTasks`):
-    - Instant filter-as-you-type with debounced 2-way route query synchronization (`route.query.search`).
-  - Fluid timeline width, zero empty intervals, and horizontal scroll engine (`colWidth`, `ResizeObserver`, `overflow-x: auto`):
-    - Zero empty weeks/months: Week view bounds strictly from earliest task Monday to latest task Sunday; Month view bounds from 1st of earliest month to last day of latest month.
-    - Minimum column width bounds (`140px` for Sequence/Day, `700px` for Week guaranteeing ~100px/day, `1500px` for Month guaranteeing ~50px/day) paired with fluid expansion `Math.max(minColWidth, distributed)` to fill wide viewports while maintaining wide inter-card channels and horizontal scroll on populated datasets.
-  - Orthogonal non-overlapping multi-track SVG connector routing:
-    - Dedicated vertical corridors across all zoom views preventing overlapping lines, line-to-line collisions (>2 lines per crossing), crossing through intermediate task cards/components, or continuing verticals past arrowheads.
-    - Semicircular bridge hops (`A 4 4 0 0 0`) for crossing line segments.
-  - Interactive Left/Right task bar anchor handles for linking dependencies via click/drag (bidirectional support: right source -> left target, or left source -> left target with cursor origin).
-  - Hoverable SVG dependency arrow paths with stable, debounced clickable "X" buttons to remove dependencies (`task modify <uuid> depends:-<prereq>`).
 - Widgets (`components/ActiveTaskBar.vue`, `components/UndoDialog.vue`, `components/CustomQueryBar.vue`, `components/ReportsView.vue`).
+- Global Controls & Live Search (`pages/index.vue`): Top-bar search text field with 300ms debounced `?search=` synchronization, view switcher (`mode`), project and assignee filtering applied to `filteredTasks`.
+- Multi-Toggle Task List (`components/TaskList.vue`): Independent status button toggles (`v-btn-toggle multiple`), aggregated task display (`displayedTasks`), dynamic column headers (`Due`, `Wait`, `Recur`), and `?status=` query parameter synchronization (preserved across view mode transitions and strictly ignored by Kanban view).
+- Gantt & Timeline Engine (`components/GanttChart.vue`): Start/due date resolution, priority/urgency vertical sorting, non-intersecting orthogonal SVG arrows, fluid Day/Week/Month horizontal scrolling, Calendarless topological flow view, unified top-bar live search integration, and reused multi-toggle status button group synchronizing with `?status=` query parameter.
 
 ## Verification Strategy
 - Backend API integration testing for timer and undo endpoints.
 - Component rendering tests for Kanban board drag-and-drop.
+- Headless browser automated tests (via Marionette/WebDriver) for query parameter synchronization (`search`, `status`, `mode`, `project`, `assignee`) and live filter-as-you-type reactivity.
 - E2E keyboard shortcut validation.

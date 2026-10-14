@@ -23,6 +23,17 @@
 				dense
 			/>
 
+			<v-text-field
+				class="mb-3 ml-3"
+				label="Search tasks..."
+				v-model="searchQuery"
+				prepend-inner-icon="mdi-magnify"
+				clearable
+				dense
+				hide-details
+				style="max-width: 220px"
+			/>
+
 			<v-spacer />
 			<v-select
 				class="mb-3 ml-3"
@@ -50,8 +61,6 @@
 			:tasks="filteredTasks"
 			:active-task-uuid="activeTaskUuid"
 			:zoom.sync="ganttZoom"
-			:status-filter.sync="ganttStatusFilter"
-			:search-filter.sync="ganttSearch"
 			@edit="handleEditTask"
 			@complete="handleCompleteTask"
 			@delete="handleDeleteTask"
@@ -138,11 +147,34 @@ export default defineComponent({
 		const assignees = computed(() => store.getters.assignees);
 		const assigneeOptions = computed(() => ['(All Assignees)', '(Unassigned)', ...assignees.value]);
 
-		const ganttZoom = ref((route.value.query.zoom as string) || 'Day');
-		const ganttStatusFilter = ref((route.value.query.ganttStatus as string) || 'Active & Pending');
-		const ganttSearch = ref((route.value.query.search as string) || '');
+		const searchQuery = ref((route.value.query.search as string) || '');
 
-		watch([mode, selectedProject, selectedAssignee, ganttZoom, ganttStatusFilter, ganttSearch], ([newMode, newProject, newAssignee, newZoom, newGanttStatus, newSearch]) => {
+		let searchDebounceTimer: any = null;
+		const updateSearchQueryParam = (newSearch: string) => {
+			if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+			searchDebounceTimer = setTimeout(() => {
+				const currentSearchInRoute = (route.value.query.search as string) || '';
+				const trimmed = (newSearch || '').trim();
+				if (currentSearchInRoute !== trimmed) {
+					const query: Record<string, string> = { ...(route.value.query as Record<string, string>) };
+					if (trimmed) {
+						query.search = trimmed;
+					}
+					else {
+						delete query.search;
+					}
+					router.replace({ query }).catch(() => {});
+				}
+			}, 300);
+		};
+
+		watch(searchQuery, (newVal) => {
+			updateSearchQueryParam(newVal);
+		});
+
+		const ganttZoom = ref((route.value.query.zoom as string) || 'Day');
+
+		watch([mode, selectedProject, selectedAssignee, ganttZoom], ([newMode, newProject, newAssignee, newZoom]) => {
 			const query: Record<string, string> = { ...(route.value.query as Record<string, string>) };
 			if (newMode !== 'Tasks') query.mode = newMode;
 			else delete query.mode;
@@ -153,20 +185,16 @@ export default defineComponent({
 			if (newAssignee !== '(All Assignees)') query.assignee = newAssignee;
 			else delete query.assignee;
 
+			const trimmedSearch = (searchQuery.value || '').trim();
+			if (trimmedSearch) query.search = trimmedSearch;
+			else delete query.search;
+
 			if (newMode === 'Gantt') {
 				if (newZoom !== 'Day') query.zoom = newZoom;
 				else delete query.zoom;
-
-				if (newGanttStatus !== 'Active & Pending') query.ganttStatus = newGanttStatus;
-				else delete query.ganttStatus;
-
-				if (newSearch) query.search = newSearch;
-				else delete query.search;
 			}
 			else {
 				delete query.zoom;
-				delete query.ganttStatus;
-				delete query.search;
 			}
 
 			router.replace({ query }).catch(() => {});
@@ -185,11 +213,10 @@ export default defineComponent({
 			if (newQuery.zoom && newQuery.zoom !== ganttZoom.value) ganttZoom.value = newQuery.zoom as string;
 			if (!newQuery.zoom && ganttZoom.value !== 'Day') ganttZoom.value = 'Day';
 
-			if (newQuery.ganttStatus && newQuery.ganttStatus !== ganttStatusFilter.value) ganttStatusFilter.value = newQuery.ganttStatus as string;
-			if (!newQuery.ganttStatus && ganttStatusFilter.value !== 'Active & Pending') ganttStatusFilter.value = 'Active & Pending';
-
-			if (newQuery.search && newQuery.search !== ganttSearch.value) ganttSearch.value = newQuery.search as string;
-			if (!newQuery.search && ganttSearch.value !== '') ganttSearch.value = '';
+			const routeSearch = (newQuery.search as string) || '';
+			if (routeSearch !== (searchQuery.value || '').trim()) {
+				searchQuery.value = routeSearch;
+			}
 		}, { deep: true });
 
 		const activeTaskUuid = computed(() => store.state.activeTask?.uuid || '');
@@ -211,6 +238,12 @@ export default defineComponent({
 			}
 			else if (selectedAssignee.value && selectedAssignee.value !== '(All Assignees)') {
 				result = result.filter(t => (t as any).assignee === selectedAssignee.value || (t as any).assignees === selectedAssignee.value);
+			}
+
+			// Search filter
+			const search = (searchQuery.value || '').trim().toLowerCase();
+			if (search) {
+				result = result.filter(t => (t.description || '').toLowerCase().includes(search));
 			}
 
 			return result;
@@ -338,6 +371,7 @@ export default defineComponent({
 			projectOptions,
 			selectedAssignee,
 			assigneeOptions,
+			searchQuery,
 			filteredTasks,
 			activeTaskUuid,
 			showTaskDialog,
@@ -352,8 +386,7 @@ export default defineComponent({
 			handleSnoozeCancel,
 			handleAddDependency,
 			handleRemoveDependency,
-			ganttZoom,
-			ganttStatusFilter
+			ganttZoom
 		};
 	}
 });
