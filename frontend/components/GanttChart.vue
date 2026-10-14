@@ -657,11 +657,12 @@ export default defineComponent({
 			return dateMap;
 		});
 
-		// 4-tier vertical sorting:
-		// 1. Priority: H > M > L > none
-		// 2. Urgency: descending
-		// 3. Dependents count: descending
-		// 4. Alphabetically: localeCompare on description
+		// 5-tier vertical sorting:
+		// 1. Status: non-deleted first, deleted last
+		// 2. Priority: H > M > L > none
+		// 3. Urgency: descending
+		// 4. Dependents count: descending
+		// 5. Alphabetically: localeCompare on description
 		const sortedTasks = computed(() => {
 			const tasksList = [...filteredTasks.value];
 
@@ -672,6 +673,11 @@ export default defineComponent({
 			};
 
 			tasksList.sort((a, b) => {
+				// Tier 0: Status (non-deleted first, deleted last)
+				const isDelA = a.status === 'deleted' ? 1 : 0;
+				const isDelB = b.status === 'deleted' ? 1 : 0;
+				if (isDelA !== isDelB) return isDelA - isDelB;
+
 				// Tier 1: Priority
 				const pA = a.priority ? (priorityOrder[a.priority.toUpperCase()] || 4) : 4;
 				const pB = b.priority ? (priorityOrder[b.priority.toUpperCase()] || 4) : 4;

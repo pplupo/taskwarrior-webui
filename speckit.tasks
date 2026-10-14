@@ -118,7 +118,7 @@
 
 ### Implementation Tasks
 - [x] T037 [P] [US8] Implement horizontal task sequencing engine (start date > due date > latest precedent task end > today; length spans start through due date).
-- [x] T038 [P] [US8] Implement vertical task sorting by Priority (HML), Urgency, dependent task count, and alphabetical description.
+- [x] T038 [P] [US8] Implement vertical task sorting with deleted tasks placed last, followed by Priority (HML), Urgency, dependent task count, and alphabetical description.
 - [x] T039 [US8] Implement orthogonal SVG dependency arrow routing with dynamic lane allocation avoiding card body crossings and overlapping vertical lines.
 - [x] T040 [US8] Implement multi-scale timeframes (Day, Week, Month) with fluid column sizing, horizontal scrolling, and truncation of unpopulated empty intervals.
 - [x] T041 [US8] Implement Calendarless flow view displaying topological task progression starting from index 0 without calendar date columns.
