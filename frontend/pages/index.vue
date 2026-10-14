@@ -2,7 +2,7 @@
 	<div class="px-md-6 px-lg-12">
 		<v-row class="px-4 pt-4 align-center">
 			<div class="headline d-flex align-center">{{ mode }}</div>
-			
+
 			<v-select
 				class="mb-3 ml-4"
 				:items="projectOptions"
@@ -45,6 +45,20 @@
 			@delete="handleDeleteTask"
 			@edit="handleEditTask"
 		/>
+		<GanttChart
+			v-else-if="mode === 'Gantt'"
+			:tasks="filteredTasks"
+			:active-task-uuid="activeTaskUuid"
+			:zoom.sync="ganttZoom"
+			:status-filter.sync="ganttStatusFilter"
+			:search-filter.sync="ganttSearch"
+			@edit="handleEditTask"
+			@complete="handleCompleteTask"
+			@delete="handleDeleteTask"
+			@toggle-timer="handleToggleTimer"
+			@add-dependency="handleAddDependency"
+			@remove-dependency="handleRemoveDependency"
+		/>
 		<TaskList v-else :tasks="filteredTasks" ref="taskListRef" />
 
 		<TaskDialog v-model="showTaskDialog" :task="editingTask || undefined" />
@@ -53,18 +67,20 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed, watch, ComputedRef, useStore, useContext, useRoute, useRouter } from '@nuxtjs/composition-api';
+import { defineComponent, ref, computed, watch, useStore, useContext, useRoute, useRouter } from '@nuxtjs/composition-api';
 import TaskList from '../components/TaskList.vue';
 import KanbanBoard from '../components/KanbanBoard.vue';
+import GanttChart from '../components/GanttChart.vue';
 import TaskDialog from '../components/TaskDialog.vue';
 import SnoozeDialog from '../components/SnoozeDialog.vue';
 import { Task } from 'taskwarrior-lib';
-import { accessorType  } from "../store";
+import { accessorType } from '../store';
 
 export default defineComponent({
 	components: {
 		TaskList,
 		KanbanBoard,
+		GanttChart,
 		TaskDialog,
 		SnoozeDialog
 	},
@@ -77,7 +93,7 @@ export default defineComponent({
 		store.dispatch('fetchTasks');
 
 		// Auto Refresh
-		let refreshInterval: NodeJS.Timeout | null = null;
+		let refreshInterval: any = null;
 		const setAutoRefresh = () => {
 			if (refreshInterval)
 				clearInterval(refreshInterval);
@@ -91,7 +107,7 @@ export default defineComponent({
 		setAutoRefresh();
 
 		// Auto Sync
-		let syncInterval: NodeJS.Timeout | null = null;
+		let syncInterval: any = null;
 		const setAutoSync = () => {
 			if (syncInterval)
 				clearInterval(syncInterval);
@@ -112,7 +128,7 @@ export default defineComponent({
 		});
 
 		const mode = ref((route.value.query.mode as string) || 'Tasks');
-		const allModes = ['Tasks', 'Kanban'];
+		const allModes = ['Tasks', 'Kanban', 'Gantt'];
 
 		const selectedProject = ref((route.value.query.project as string) || '(All Projects)');
 		const projects = computed(() => store.getters.projects);
@@ -122,7 +138,11 @@ export default defineComponent({
 		const assignees = computed(() => store.getters.assignees);
 		const assigneeOptions = computed(() => ['(All Assignees)', '(Unassigned)', ...assignees.value]);
 
-		watch([mode, selectedProject, selectedAssignee], ([newMode, newProject, newAssignee]) => {
+		const ganttZoom = ref((route.value.query.zoom as string) || 'Day');
+		const ganttStatusFilter = ref((route.value.query.ganttStatus as string) || 'Active & Pending');
+		const ganttSearch = ref((route.value.query.search as string) || '');
+
+		watch([mode, selectedProject, selectedAssignee, ganttZoom, ganttStatusFilter, ganttSearch], ([newMode, newProject, newAssignee, newZoom, newGanttStatus, newSearch]) => {
 			const query: Record<string, string> = { ...(route.value.query as Record<string, string>) };
 			if (newMode !== 'Tasks') query.mode = newMode;
 			else delete query.mode;
@@ -132,6 +152,22 @@ export default defineComponent({
 
 			if (newAssignee !== '(All Assignees)') query.assignee = newAssignee;
 			else delete query.assignee;
+
+			if (newMode === 'Gantt') {
+				if (newZoom !== 'Day') query.zoom = newZoom;
+				else delete query.zoom;
+
+				if (newGanttStatus !== 'Active & Pending') query.ganttStatus = newGanttStatus;
+				else delete query.ganttStatus;
+
+				if (newSearch) query.search = newSearch;
+				else delete query.search;
+			}
+			else {
+				delete query.zoom;
+				delete query.ganttStatus;
+				delete query.search;
+			}
 
 			router.replace({ query }).catch(() => {});
 		});
@@ -145,9 +181,17 @@ export default defineComponent({
 
 			if (newQuery.assignee && newQuery.assignee !== selectedAssignee.value) selectedAssignee.value = newQuery.assignee as string;
 			if (!newQuery.assignee && selectedAssignee.value !== '(All Assignees)') selectedAssignee.value = '(All Assignees)';
+
+			if (newQuery.zoom && newQuery.zoom !== ganttZoom.value) ganttZoom.value = newQuery.zoom as string;
+			if (!newQuery.zoom && ganttZoom.value !== 'Day') ganttZoom.value = 'Day';
+
+			if (newQuery.ganttStatus && newQuery.ganttStatus !== ganttStatusFilter.value) ganttStatusFilter.value = newQuery.ganttStatus as string;
+			if (!newQuery.ganttStatus && ganttStatusFilter.value !== 'Active & Pending') ganttStatusFilter.value = 'Active & Pending';
+
+			if (newQuery.search && newQuery.search !== ganttSearch.value) ganttSearch.value = newQuery.search as string;
+			if (!newQuery.search && ganttSearch.value !== '') ganttSearch.value = '';
 		}, { deep: true });
 
-		const allTasks: ComputedRef<Task[]> = computed(() => store.state.tasks);
 		const activeTaskUuid = computed(() => store.state.activeTask?.uuid || '');
 
 		const filteredTasks = computed(() => {
@@ -156,14 +200,16 @@ export default defineComponent({
 			// Project filter
 			if (selectedProject.value === '(No Project)') {
 				result = result.filter(t => !t.project);
-			} else if (selectedProject.value && selectedProject.value !== '(All Projects)') {
+			}
+			else if (selectedProject.value && selectedProject.value !== '(All Projects)') {
 				result = result.filter(t => t.project === selectedProject.value);
 			}
 
 			// Assignee filter
 			if (selectedAssignee.value === '(Unassigned)') {
 				result = result.filter(t => !(t as any).assignee && !(t as any).assignees);
-			} else if (selectedAssignee.value && selectedAssignee.value !== '(All Assignees)') {
+			}
+			else if (selectedAssignee.value && selectedAssignee.value !== '(All Assignees)') {
 				result = result.filter(t => (t as any).assignee === selectedAssignee.value || (t as any).assignees === selectedAssignee.value);
 			}
 
@@ -195,7 +241,8 @@ export default defineComponent({
 		const handleToggleTimer = async (task: Task) => {
 			if (task.start || task.uuid === activeTaskUuid.value) {
 				await store.dispatch('stopTimer', task.uuid);
-			} else {
+			}
+			else {
 				await store.dispatch('startTimer', task.uuid);
 			}
 		};
@@ -204,14 +251,16 @@ export default defineComponent({
 			try {
 				if (targetColumnId === 'inProgress') {
 					await store.dispatch('startTimer', task.uuid);
-				} else if (targetColumnId === 'done') {
+				}
+				else if (targetColumnId === 'done') {
 					if (task.start || task.uuid === activeTaskUuid.value) {
 						await store.dispatch('stopTimer', task.uuid);
 					}
 					const payload = { ...task, status: 'completed' };
 					if (payload.start) delete payload.start;
 					await store.dispatch('updateTasks', [payload]);
-				} else if (targetColumnId === 'todo') {
+				}
+				else if (targetColumnId === 'todo') {
 					if (task.start || task.uuid === activeTaskUuid.value) {
 						await store.dispatch('stopTimer', task.uuid);
 					}
@@ -222,11 +271,13 @@ export default defineComponent({
 						if (updatedTask.start) delete updatedTask.start;
 						await store.dispatch('updateTasks', [updatedTask]);
 					}
-				} else if (targetColumnId === 'waiting') {
+				}
+				else if (targetColumnId === 'waiting') {
 					taskToSnooze.value = task;
 					showSnoozeDialog.value = true;
 				}
-			} catch (e) {
+			}
+			catch (e) {
 				console.error('Error changing task column:', e);
 				await store.dispatch('fetchTasks');
 			}
@@ -245,7 +296,8 @@ export default defineComponent({
 					const payload = { ...targetTask, status: 'pending', wait: waitDate };
 					if (payload.start) delete payload.start;
 					await store.dispatch('updateTasks', [payload]);
-				} catch (e) {
+				}
+				catch (e) {
 					console.error('Error snoozing task:', e);
 					await store.dispatch('fetchTasks');
 				}
@@ -257,6 +309,26 @@ export default defineComponent({
 			taskToSnooze.value = null;
 			// Trigger a fresh fetch to reset the board columns back to actual state
 			store.dispatch('fetchTasks');
+		};
+
+		const handleAddDependency = async ({ task }: { task: Task; prereqUuid: string }) => {
+			try {
+				await store.dispatch('updateTasks', [task]);
+			}
+			catch (e) {
+				console.error('Error adding dependency:', e);
+				await store.dispatch('fetchTasks');
+			}
+		};
+
+		const handleRemoveDependency = async ({ task }: { task: Task; prereqUuid: string }) => {
+			try {
+				await store.dispatch('updateTasks', [task]);
+			}
+			catch (e) {
+				console.error('Error removing dependency:', e);
+				await store.dispatch('fetchTasks');
+			}
 		};
 
 		return {
@@ -277,7 +349,11 @@ export default defineComponent({
 			handleToggleTimer,
 			handleColumnChange,
 			handleSnoozeConfirm,
-			handleSnoozeCancel
+			handleSnoozeCancel,
+			handleAddDependency,
+			handleRemoveDependency,
+			ganttZoom,
+			ganttStatusFilter
 		};
 	}
 });
