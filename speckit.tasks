@@ -14,7 +14,7 @@
 
 **Purpose**: Baseline verification of branch and component entry points
 
-- [ ] T001 Verify clean test environment and target components in `frontend/`.
+- [x] T001 Verify clean test environment and target components in `frontend/`.
 
 ---
 
@@ -24,9 +24,9 @@
 **Independent Test**: Filter by a project and assignee in the UI and open the New Task dialog; verify Project and Assignee are pre-filled. Clear filters and verify Assignee pre-fills from `settings.assigneeName`.
 
 ### Implementation Tasks
-- [ ] T002 [P] [US1] Add `initialProject` and `initialAssignee` props to `frontend/components/TaskDialog.vue` and update form initialization to respect them with fallback to `store.state.settings.assigneeName`.
-- [ ] T003 [US1] Update `frontend/pages/index.vue` to compute active project and assignee and pass them to `TaskDialog`.
-- [ ] T004 [US1] Update `newTask` trigger in `frontend/components/TaskList.vue` to preserve active filter context.
+- [x] T002 [P] [US1] Add `initialProject` and `initialAssignee` props to `frontend/components/TaskDialog.vue` and update form initialization to respect them with fallback to `store.state.settings.assigneeName`.
+- [x] T003 [US1] Update `frontend/pages/index.vue` to compute active project and assignee and pass them to `TaskDialog`.
+- [x] T004 [US1] Update `newTask` trigger in `frontend/components/TaskList.vue` to preserve active filter context.
 
 ---
 
@@ -36,8 +36,8 @@
 **Independent Test**: Open New Task dialog, fill Description and dates, press `Ctrl+Enter`; verify task is saved, Description/annotations are cleared, Project/Assignee are retained, and cursor refocuses on Description.
 
 ### Implementation Tasks
-- [ ] T005 [US2] Implement `saveAndContinue` method in `frontend/components/TaskDialog.vue` to validate, dispatch task creation, retain Project/Assignee, reset other fields, and retain focus.
-- [ ] T006 [US2] Add keyboard shortcut listener for `(e.ctrlKey || e.metaKey) && e.key === 'Enter'` in `frontend/components/TaskDialog.vue` to trigger `saveAndContinue`.
+- [x] T005 [US2] Implement `saveAndContinue` method in `frontend/components/TaskDialog.vue` to validate, dispatch task creation, retain Project/Assignee, reset other fields, and retain focus.
+- [x] T006 [US2] Add keyboard shortcut listener for `(e.ctrlKey || e.metaKey) && e.key === 'Enter'` in `frontend/components/TaskDialog.vue` to trigger `saveAndContinue`.
 
 ---
 
@@ -47,8 +47,8 @@
 **Independent Test**: Open TaskDialog, click the calendar icon beside `due`, pick a date from the picker, and verify the formatted date string is populated into the field. Type `tomorrow` into `scheduled` directly and verify text entry works without obstruction.
 
 ### Implementation Tasks
-- [ ] T007 [P] [US3] Create date/time picker menu popups (`v-menu` with `v-date-picker`) on `due`, `until`, `scheduled`, and `wait` fields in `frontend/components/TaskDialog.vue`.
-- [ ] T008 [US3] Format selected dates from picker into `YYYY-MM-DD` and wire reactivity back to `formData`.
+- [x] T007 [P] [US3] Create date/time picker menu popups (`v-menu` with `v-date-picker`) on `due`, `until`, `scheduled`, and `wait` fields in `frontend/components/TaskDialog.vue`.
+- [x] T008 [US3] Format selected dates from picker into `YYYY-MM-DD` and wire reactivity back to `formData`.
 
 ---
 
@@ -58,8 +58,8 @@
 **Independent Test**: In TaskList view, change table sorting to Priority descending and items per page to 25. Refresh the browser; verify table options are restored from `localStorage`.
 
 ### Implementation Tasks
-- [ ] T009 [P] [US4] Bind `:options.sync="tableOptions"` on `v-data-table` in `frontend/components/TaskList.vue`.
-- [ ] T010 [US4] Add `localStorage` loading on mount and reactive watcher to save `tableOptions` (`sortBy`, `sortDesc`, `itemsPerPage`).
+- [x] T009 [P] [US4] Bind `:options.sync="tableOptions"` on `v-data-table` in `frontend/components/TaskList.vue`.
+- [x] T010 [US4] Add `localStorage` loading on mount and reactive watcher to save `tableOptions` (`sortBy`, `sortDesc`, `itemsPerPage`).
 
 ---
 
@@ -67,8 +67,8 @@
 
 **Purpose**: End-to-end integration and smoke verification across all updated components
 
-- [ ] T011 Run frontend build and linter checks (`npm run build`).
-- [ ] T012 Verify complete Phase 2 user journeys: pre-fill, bulk add loop, date pickers, and persistent sorting.
+- [x] T011 Run frontend build and linter checks (`npm run build`).
+- [x] T012 Verify complete Phase 2 user journeys: pre-fill, bulk add loop, date pickers, and persistent sorting.
 
 ---
 
