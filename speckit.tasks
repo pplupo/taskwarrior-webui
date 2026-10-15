@@ -1,127 +1,40 @@
-# Tasks: Taskwarrior WebUI Enhancement
+# Implementation Tasks - Phase 3: Configurations & Architecture
 
-**Input**: Design documents from `speckit.specify` and `speckit.plan`
-**Target Repository**: `https://github.com/pplupo/taskwarrior-webui` (`/home/pplupo/repos/webui2`)
+## Task List
 
----
+- [x] Task 1: Configurable Port Support (#92)
+  - [x] 1.1 Support `PORT` (and `APP_PORT`) env variable in `backend/src/app.ts` (default 3000)
+  - [x] 1.2 Support `PORT` env variable in `docker/start.sh` and `nginx/server.conf` template (default 80)
+  - [x] 1.3 Verify custom port binding in backend and Docker startup
 
-## Phase 1: Setup & Foundational Prerequisites
+- [x] Task 2: Reverse Proxy Base Path Support (#88)
+  - [x] 2.1 Configure `router.base` and Axios `baseURL` in `frontend/nuxt.config.js` via `ROUTER_BASE_PATH` (default `/`)
+  - [x] 2.2 Configure Koa routes in `backend/src/app.ts` to mount under `ROUTER_BASE_PATH`
+  - [x] 2.3 Update Nginx reverse proxy configuration in `nginx/server.conf` and `docker/start.sh` to route prefix requests
+  - [x] 2.4 Verify asset loading and API calls under custom base path
 
-**Purpose**: Scaffold project structure and dependency foundation
+- [x] Task 3: Multi-Profile Support (#96)
+  - [x] 3.1 Implement profile manager and cache in `backend/src/profiles.ts` supporting `TASK_PROFILES`
+  - [x] 3.2 Update `backend/src/taskwarrior.ts` and route handlers to resolve profile from `X-Taskwarrior-Profile` header or query
+  - [x] 3.3 Add `GET /config/profiles` endpoint in backend
+  - [x] 3.4 Add profile state in Vuex store (`frontend/store/index.ts`) and Axios interceptor for `X-Taskwarrior-Profile`
+  - [x] 3.5 Add Profile switcher component/menu in `frontend/layouts/default.vue`
+  - [x] 3.6 Verify switching between profiles reloads tasks and queries with correct `TASKRC`/`TASKDATA`
 
-- [ ] T001 Verify `spec-kit` configuration and directory scaffold in `/home/pplupo/repos/webui2`.
-- [ ] T002 Add required npm packages (`vuedraggable`, `hotkeys-js`) in `frontend/package.json`.
-- [ ] T003 Configure hotkey plugin registration structure in `frontend/plugins/hotkeys.ts`.
+- [x] Task 4: Taskwarrior Contexts Support (#18)
+  - [x] 4.1 Implement `backend/src/contexts.ts` with `GET /config/contexts` (`task _context`, `task _get rc.context`) and `POST /config/contexts`
+  - [x] 4.2 Support `X-Taskwarrior-Context` header in backend CLI executions for request-level context override
+  - [x] 4.3 Add context state and actions in Vuex store (`frontend/store/index.ts`)
+  - [x] 4.4 Add Context switcher menu/badge in `frontend/layouts/default.vue`
+  - [x] 4.5 Verify listing, switching, and clearing active context in UI
 
----
+- [x] Task 5: Sub-projects Hierarchical Filtering (#43)
+  - [x] 5.1 Add "Include subprojects" toggle in `frontend/pages/index.vue`
+  - [x] 5.2 Implement hierarchical matching in `filteredTasks` (`task.project === selected || task.project.startsWith(selected + '.')`)
+  - [x] 5.3 Persist subproject toggle state in URL query `?subprojects=1`
+  - [x] 5.4 Ensure hierarchical filtering applies consistently across Tasks, Kanban, and Gantt views
 
-## Phase 2: User Story 1 - Keyboard Navigation & Mnemonic Overlay Engine (Priority: P1) 🎯 MVP
-
-**Goal**: Enable keyboard-centric navigation, search focus (`Ctrl+Shift+K`), and dynamic 1-2 character mnemonic red-box overlays on UI elements.
-
-### Implementation Tasks
-- [ ] T004 [P] [US1] Create hotkey engine plugin in `frontend/plugins/hotkeys.ts` with global listeners.
-- [ ] T005 [P] [US1] Implement mnemonic generator utility in `frontend/utils/mnemonics.ts` mapping shortcuts to task IDs, tags, projects, and queries.
-- [ ] T006 [US1] Update `frontend/components/TaskList.vue` to render red-box mnemonic overlay badges over task items.
-- [ ] T007 [US1] Wire `Ctrl+Shift+K` to focus the search bar across `frontend/pages/index.vue` and `frontend/layouts/default.vue`.
-
----
-
-## Phase 3: User Story 2 - Active Task Timer & Timewarrior Integration (Priority: P1) 🎯 MVP
-
-**Goal**: Display currently running task widget (`+ACTIVE`), allow starting/stopping timers, and auto-stop previously running tasks.
-
-### Implementation Tasks
-- [ ] T008 [P] [US2] Implement active task endpoint (`GET /api/tasks/active`) in `backend/src/tasks.ts`.
-- [ ] T009 [P] [US2] Implement start and stop timer endpoints (`POST /api/tasks/:uuid/start`, `POST /api/tasks/:uuid/stop`) in `backend/src/tasks.ts`.
-- [ ] T10 [US2] Extend Vuex state (`frontend/store/index.ts`) with `activeTask` state and timer actions.
-- [ ] T011 [US2] Create floating timer component `frontend/components/ActiveTaskBar.vue` with start/stop triggers.
-- [ ] T012 [US2] Integrate `ActiveTaskBar` widget into `frontend/layouts/default.vue`.
-
----
-
-## Phase 4: User Story 3 - TWKB-Inspired Kanban Board View (Priority: P1) 🎯 MVP
-
-**Goal**: Provide a responsive 4-column Kanban board (`To Do`, `In Progress`, `Waiting`, `Done`) with drag-and-drop state updates and rich card metadata chips.
-
-### Implementation Tasks
-- [ ] T013 [P] [US3] Create `frontend/components/KanbanCard.vue` displaying urgency, priority chips, project tags, blocked indicators, and inline action buttons.
-- [ ] T014 [US3] Create `frontend/components/KanbanBoard.vue` implementing 4-column drag-and-drop layout via `vuedraggable`.
-- [ ] T015 [US3] Wire drag-and-drop state handlers in `KanbanBoard.vue` to trigger timer start (when moved to In Progress) and completion (when moved to Done).
-- [ ] T016 [US3] Add `Kanban` display mode option to `frontend/pages/index.vue` view switcher.
-
----
-
-## Phase 5: User Story 4 - Undo System & Revert Preview (Priority: P2)
-
-**Goal**: Provide an operation revert report preview (`/tasks/undo/report`) and confirmable `task undo` execution.
-
-### Implementation Tasks
-- [ ] T017 [P] [US4] Implement undo preview endpoint (`GET /api/tasks/undo/preview`) in `backend/src/tasks.ts`.
-- [ ] T018 [P] [US4] Implement undo execution endpoint (`POST /api/tasks/undo`) in `backend/src/tasks.ts`.
-- [ ] T019 [US4] Create `frontend/components/UndoDialog.vue` to render operations revert preview before confirming undo.
-- [ ] T020 [US4] Bind `u` keyboard shortcut in `frontend/plugins/hotkeys.ts` to trigger `UndoDialog`.
-
----
-
-## Phase 6: User Story 5 - Custom Queries Engine & Detailed Task Modifiers (Priority: P2)
-
-**Goal**: Support custom queries via config/env vars with shortcut keys, dependency tree sorting, annotation editing, and free-form CLI modifiers.
-
-### Implementation Tasks
-- [ ] T021 [P] [US5] Implement custom queries loader (`GET /api/config/queries`) in `backend/src/queries.ts`.
-- [ ] T022 [P] [US5] Implement task annotation & modifier endpoints (`POST /api/tasks/:uuid/annotate`, `POST /api/tasks/:uuid/modify`) in `backend/src/tasks.ts`.
-- [ ] T023 [US5] Create `frontend/components/CustomQueryBar.vue` with keybindings support.
-- [ ] T024 [US5] Enhance `frontend/components/TaskDialog.vue` with dependency tree viewer, annotation manager, and free-form Taskwarrior command modifier input.
-
----
-
-## Phase 7: Polish, Analytics & Reporting
-
-**Purpose**: Reporting dashboards and cross-cutting UI polish
-
-- [ ] T025 [P] Implement project progress and burndown analytics endpoint (`GET /api/reports/projects`) in `backend/src/reports.ts`.
-- [ ] T026 [P] Create `frontend/components/ReportsView.vue` with visual project completion progress rings and burndown charts.
-- [ ] T027 Add copy tag helper button to tag pills in `frontend/components/TaskList.vue`.
-- [ ] T028 Validate end-to-end user workflows and verify state synchronization.
-
----
-
-## Phase 8: User Story 6 - Global Filter-as-you-Type Search & URL Query Synchronization (Priority: P1)
-
-**Goal**: Provide an instantaneous filter-as-you-type search input in the top bar that filters tasks across all views and syncs state to URL query parameter `?search=...`.
-
-### Implementation Tasks
-- [x] T029 [P] [US6] Add search `v-text-field` and reactive `searchQuery` ref in the top controls bar of `frontend/pages/index.vue`.
-- [x] T030 [P] [US6] Integrate case-insensitive task description filtering into `filteredTasks` computed property, propagating reactively to `TaskList` and `KanbanBoard`.
-- [x] T031 [US6] Implement bidirectional `?search=` URL query synchronization with 300ms debounce on typing, preserving existing query parameters.
-
----
-
-## Phase 9: User Story 7 - Multi-Toggle Task Status Filtering in Task List (Priority: P1)
-
-**Goal**: Make status filters in the Tasks list view independent toggles rather than mutually exclusive, aggregating matching tasks and synchronizing with URL query parameter `?status=...`.
-
-### Implementation Tasks
-- [x] T032 [P] [US7] Convert `v-btn-toggle` in `frontend/components/TaskList.vue` to `multiple` binding to `selectedStatuses` array.
-- [x] T033 [P] [US7] Implement `displayedTasks` computed property to aggregate tasks matching any active status.
-- [x] T034 [US7] Implement bidirectional URL query synchronization for `?status=` supporting comma-separated values (e.g. `pending,waiting`, `completed`, `none`).
-- [x] T035 [US7] Update data-table headers to dynamically include `Due`, `Wait`, and `Recur` columns based on active status selections.
-- [x] T036 [US7] Refactor batch action buttons (Done, Restore, Delete) and row action icons to evaluate individual `item.status`.
-- [x] T036b [US7] Ensure `?status=` query parameter has no filtering effect in the Kanban view while preserving its value intact across mode switches.
-
----
-
-## Phase 10: User Story 8 - Gantt Chart, Timeline Views & Calendarless Flow (Priority: P2)
-
-**Goal**: Deliver a comprehensive timeline visualization with deterministic date sequencing, priority/urgency sorting, clean orthogonal arrow routing, and calendarless topological flow view.
-
-### Implementation Tasks
-- [x] T037 [P] [US8] Implement horizontal task sequencing engine (start date > due date > latest precedent task end > today; length spans start through due date).
-- [x] T038 [P] [US8] Implement vertical task sorting with deleted tasks placed last, followed by Priority (HML), Urgency, dependent task count, and alphabetical description.
-- [x] T039 [US8] Implement orthogonal SVG dependency arrow routing with dynamic lane allocation avoiding card body crossings and overlapping vertical lines.
-- [x] T040 [US8] Implement multi-scale timeframes (Day, Week, Month) with fluid column sizing, horizontal scrolling, and truncation of unpopulated empty intervals.
-- [x] T041 [US8] Implement Calendarless flow view displaying topological task progression starting from index 0 without calendar date columns.
-- [x] T042 [US8] Unify Gantt search with global top-bar filter-as-you-type search in `frontend/pages/index.vue`, removing redundant local search controls.
-- [x] T043 [US8] Reuse Tasks list status multi-toggle button group (`pending`, `waiting`, `completed`, `deleted`, `recurring`) in `frontend/components/GanttChart.vue`, binding to `?status=` URL query parameter and removing legacy status filters.
-
+- [x] Task 6: Final Integration and Build Verification
+  - [x] 6.1 Run TypeScript typechecks and backend build (`cd backend && npm run build`)
+  - [x] 6.2 Run frontend build (`cd frontend && npm run build`)
+  - [x] 6.3 Test simultaneous combination of context, profile, and subproject filters

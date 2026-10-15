@@ -7,23 +7,43 @@ Implement architectural, deployment configuration, and advanced Taskwarrior feat
 1. **#88 Reverse Proxy Base Path Support**:
    - Allow serving taskwarrior-webui under a URL subpath (e.g. `/tasks`) behind reverse proxies (Apache, Nginx, Traefik).
    - Configure Nuxt `router.base` and Axios `baseURL` driven by environment variable `ROUTER_BASE_PATH` (default `/`).
-   - Ensure static assets and Koa backend API routes resolve correctly under the prefix.
+   - Support `ROUTER_BASE_PATH` in Koa backend API routes (mount routes at `${ROUTER_BASE_PATH}api` as well as root `/api` or dynamically prefixing) and Docker Nginx configuration template/script.
 
 2. **#92 Configurable Port**:
-   - Make the server listening port configurable via environment variable `PORT` (or `APP_PORT`), defaulting to current default (80 or existing port), allowing unprivileged ports like 8080 or custom port bindings without modifying source code.
+   - Make server listening ports configurable via `PORT` environment variable:
+     - Koa backend: listen on `process.env.PORT || 3000` (or `APP_PORT`).
+     - Docker Nginx: template or substitute `PORT` (default 80) in `server.conf` during `/start.sh`.
 
 3. **#18 Taskwarrior Contexts Support (`task context`)**:
-   - Add backend API endpoints to query available contexts (`task _context` / `task context list`), view active context, and switch active context (`task context <name>` or `task context none`).
-   - Provide a UI selector or badge in the top bar to switch and view the active context.
+   - Add backend API endpoints:
+     - `GET /config/contexts`: returns list of available contexts (`task _context`) and the current active context (`task _get rc.context`).
+     - `POST /config/contexts`: sets or clears active context.
+   - Dual-mode context support:
+     - Persistent / global change via `POST /config/contexts` (`task context <name>` / `task context none`).
+     - Request-level override via header `X-Taskwarrior-Context` (which injects `rc.context=<name>` into CLI commands), allowing isolated sessions or multi-client control.
+   - UI context selector:
+     - Display a dropdown/menu in the top app bar next to the title or command bar.
+     - Allows selecting `none` or any defined context, persisting selection in local state and notifying the backend.
 
 4. **#43 Sub-projects Display in Project View**:
-   - Allow hierarchical project filtering: when viewing a parent project (e.g., `work`), provide option to view tasks belonging to all descendant sub-projects (e.g., `work.clientA`, `work.clientB`).
+   - Support both exact match and hierarchical sub-project matching:
+     - Add an "Include subprojects" toggle switch or checkbox in the filter bar (next to the Project selector in `pages/index.vue`).
+     - When enabled, if `selectedProject` is `work`, matching tasks include `work` and any `work.<child>` (`task.project === selectedProject || task.project.startsWith(selectedProject + '.')`).
+     - When disabled (or default), exact project match behavior is preserved.
+     - Also support selecting hierarchical projects in `TaskList.vue`, `KanbanBoard.vue`, and `GanttChart.vue`.
 
 5. **#96 Multiple `.taskrc` / `.task` Profiles with UI Selector**:
-   - Allow switching between separate data directories/profiles (e.g. `Personal`, `Work`) without requiring multiple running container instances.
-   - Configure profile mappings and pass active profile via header/session to backend Taskwarrior CLI invocations.
+   - Backend profile configuration:
+     - Supported via environment variable `TASK_PROFILES` with JSON or key-value format (e.g., `Default:~/.taskrc:~/.task,Work:~/.taskrc.work:~/.task.work` or `{"Work": {"taskrc": "~/.taskrc.work", "taskdata": "~/.task.work"}}`), defaulting to a single `Default` profile with `process.env.TASKRC` and `process.env.TASKDATA`.
+     - Endpoints: `GET /config/profiles` returning available profile names.
+   - Multi-profile routing:
+     - Client passes active profile via header `X-Taskwarrior-Profile: <profile_name>`.
+     - Backend routes TaskwarriorLib calls using the corresponding `TASKRC` and `TASKDATA` paths for that profile.
+   - Frontend UI:
+     - If more than 1 profile is configured, show a profile switcher in the top bar (or combined profile/context menu).
+     - Persist selected profile in localStorage and attach `X-Taskwarrior-Profile` to Axios requests.
 
 ## User Stories
 - As a self-hoster running a reverse proxy, I want to host Taskwarrior WebUI at a custom sub-path (e.g. `/tasks`) and custom port so that it fits into my existing reverse proxy routing rules.
 - As a user with multiple contexts or multiple profiles, I want to switch contexts and profiles directly from the WebUI without touching configuration files or running multiple server instances.
-- As a user organizing tasks with nested projects (`parent.child`), I want to see tasks in sub-projects when selecting the parent project.
+- As a user organizing tasks with nested projects (`parent.child`), I want to see tasks in sub-projects when selecting the parent project via a toggle switch.

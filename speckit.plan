@@ -1,31 +1,66 @@
-# Implementation Plan - Taskwarrior WebUI Enhancement
+# Implementation Plan - Phase 3: Configurations & Architecture
 
 ## Architecture & Tech Stack
-- **Target Fork**: https://github.com/pplupo/taskwarrior-webui
+- **Target Fork**: https://github.com/pplupo/taskwarrior-webui (branch `phase3-configs`)
 - **Backend**: Node.js, Koa.js, TypeScript, taskwarrior-lib CLI wrapper.
 - **Frontend**: Vue 2 (Composition API), Nuxt.js, Vuetify (Material Design), Vuex (typed-vuex).
 
 ## Proposed Architectural Modules
 
-### 1. Backend Extensions (`backend/src/`)
-- `GET /api/tasks/active`: Query active task status.
-- `POST /api/tasks/:uuid/start` & `POST /api/tasks/:uuid/stop`: Direct timer management.
-- `POST /api/tasks/:uuid/annotate` & `DELETE /api/tasks/:uuid/annotate`: Annotation management.
-- `POST /api/tasks/undo` & `GET /api/tasks/undo/preview`: Undo operations preview and execution.
-- `GET /api/config/queries`: Custom queries loader.
-- `GET /api/reports/burndown` & `GET /api/reports/projects`: Progress metrics.
+### 1. Reverse Proxy & Deployment Configuration (#88, #92)
+- **Base Path Routing (`#88`)**:
+  - `frontend/nuxt.config.js`:
+    - Read `process.env.ROUTER_BASE_PATH` (default `/`), configuring `router: { base: basePath }`.
+    - Configure `axios: { baseURL: basePath === '/' ? '/' : `${basePath}/` }`.
+    - Set up proxy or API rewrite so calls to `${basePath}api` forward to backend.
+  - `backend/src/app.ts`:
+    - Support base path prefix mounting in Koa router if specified via `process.env.ROUTER_BASE_PATH`, or allow matching both `/api/...` and `${basePath}api/...`.
+  - `nginx/server.conf` & `docker/start.sh`:
+    - Update `start.sh` and Nginx template to support environment variables `PORT` (default 80) and `ROUTER_BASE_PATH` (default `/`).
+- **Configurable Port (`#92`)**:
+  - `backend/src/app.ts`:
+    - Read `process.env.PORT` (or `APP_PORT`), defaulting to 3000.
+  - `docker/start.sh`:
+    - Substitute `$PORT` into `/etc/nginx/conf.d/default.conf` (listen on `$PORT`).
 
-### 2. Frontend Components & Store (`frontend/`)
-- Store additions: `activeTask`, `customQueries`, `undoPreview`, `activeViewMode`, `mnemonicsMap`.
-- Keyboard & Mnemonic Engine (`plugins/hotkeys.ts`): Shortcut handlers (`Ctrl+Shift+K`, `n`, `t`, `q`, `u`, `s`) with visual red-box overlays.
-- Kanban View (`components/KanbanBoard.vue`, `components/KanbanCard.vue`): 4-column drag-and-drop layout (To Do, In Progress, Waiting, Done).
-- Widgets (`components/ActiveTaskBar.vue`, `components/UndoDialog.vue`, `components/CustomQueryBar.vue`, `components/ReportsView.vue`).
-- Global Controls & Live Search (`pages/index.vue`): Top-bar search text field with 300ms debounced `?search=` synchronization, view switcher (`mode`), project and assignee filtering applied to `filteredTasks`.
-- Multi-Toggle Task List (`components/TaskList.vue`): Independent status button toggles (`v-btn-toggle multiple`), aggregated task display (`displayedTasks`), dynamic column headers (`Due`, `Wait`, `Recur`), and `?status=` query parameter synchronization (preserved across view mode transitions and strictly ignored by Kanban view).
-- Gantt & Timeline Engine (`components/GanttChart.vue`): Start/due date resolution, priority/urgency vertical sorting (with deleted tasks positioned last), non-intersecting orthogonal SVG arrows, fluid Day/Week/Month horizontal scrolling, Calendarless topological flow view, unified top-bar live search integration, and reused multi-toggle status button group synchronizing with `?status=` query parameter.
+### 2. Multi-Profile Architecture (#96)
+- **Backend Profile Manager (`backend/src/profiles.ts` & `backend/src/taskwarrior.ts`)**:
+  - Parse `process.env.TASK_PROFILES` (format: `Name:rc_path:data_path,Name2:rc_path2:data_path2` or JSON).
+  - Default profile: `Default` using `process.env.TASKRC || '/.taskrc'` and `process.env.TASKDATA || '/.task'`.
+  - Provide helper `getTaskwarrior(profileName?: string): TaskwarriorLib` that caches instances by profile.
+  - Add middleware to extract profile from `X-Taskwarrior-Profile` request header or query parameter `profile`.
+  - Endpoints in `backend/src/profiles.ts`:
+    - `GET /config/profiles`: returns list of available profile names and default profile.
+- **Frontend Profile Switching**:
+  - Store state `currentProfile` and `profiles` list in `frontend/store/index.ts`.
+  - Fetch profiles on initial load; if `profiles.length > 1`, display Profile selector in `frontend/layouts/default.vue`.
+  - Axios interceptor in Nuxt plugin/store attaching `X-Taskwarrior-Profile` to outgoing requests.
+  - Persist selection to `localStorage.getItem('taskwarrior_profile')`.
+
+### 3. Context Support (#18)
+- **Backend Context Endpoints (`backend/src/contexts.ts`)**:
+  - `GET /config/contexts`: runs `task _context` to list contexts, and `task _get rc.context` to get active context.
+  - `POST /config/contexts`: accepts `{ context: string }`. Runs `task context <name>` (or `task context none` if empty/none).
+  - Context override in `taskwarrior-lib` execution: if `X-Taskwarrior-Context` header is present, pass `rc.context=<name>` to Taskwarrior CLI invocations.
+- **Frontend Context UI**:
+  - Store state `activeContext` and `contexts` list.
+  - Top-bar Context menu/select in `frontend/layouts/default.vue` showing currently active context and dropdown to switch context or clear context.
+  - When switched, invoke `POST /config/contexts` and reload task lists.
+
+### 4. Sub-Projects Hierarchical Filtering (#43)
+- **Filter State & Logic (`frontend/pages/index.vue`, `frontend/components/TaskList.vue`)**:
+  - Add `includeSubprojects` boolean ref/state in `pages/index.vue` and `TaskList.vue`.
+  - Add a toggle switch `v-switch` or button next to Project filter: "Include subprojects".
+  - In `filteredTasks`:
+    - When `includeSubprojects` is true and `selectedProject` is set:
+      `t.project === selectedProject || (t.project && t.project.startsWith(selectedProject + '.'))`
+    - When `includeSubprojects` is false:
+      `t.project === selectedProject`
+  - Sync `includeSubprojects` with route query `?subprojects=1` for URL persistence and sharing.
 
 ## Verification Strategy
-- Backend API integration testing for timer and undo endpoints.
-- Component rendering tests for Kanban board drag-and-drop.
-- Headless browser automated tests (via Marionette/WebDriver) for query parameter synchronization (`search`, `status`, `mode`, `project`, `assignee`) and live filter-as-you-type reactivity.
-- E2E keyboard shortcut validation.
+- Run unit/typecheck tests on backend: `npm run build` in `backend/`.
+- Run Nuxt build on frontend: `npm run build` in `frontend/`.
+- Verify port and base path variables (`PORT=8080`, `ROUTER_BASE_PATH=/tasks`).
+- Verify multi-profile retrieval and context endpoints via backend routing tests.
+- Verify subproject filtering logic with tasks belonging to `project:work` and `project:work.subproject`.

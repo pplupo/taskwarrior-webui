@@ -13,6 +13,16 @@
 				dense
 			/>
 
+			<v-checkbox
+				v-if="selectedProject && selectedProject !== '(All Projects)' && selectedProject !== '(No Project)'"
+				class="mb-3 ml-2"
+				v-model="includeSubprojects"
+				label="Subprojects"
+				dense
+				hide-details
+				title="Include subprojects"
+			/>
+
 			<v-select
 				class="mb-3 ml-3"
 				:items="assigneeOptions"
@@ -140,6 +150,7 @@ export default defineComponent({
 		const allModes = ['Tasks', 'Kanban', 'Gantt'];
 
 		const selectedProject = ref((route.value.query.project as string) || '(All Projects)');
+		const includeSubprojects = ref(route.value.query.subprojects === '1');
 		const projects = computed(() => store.getters.projects);
 		const projectOptions = computed(() => ['(All Projects)', '(No Project)', ...projects.value]);
 
@@ -174,13 +185,20 @@ export default defineComponent({
 
 		const ganttZoom = ref((route.value.query.zoom as string) || 'Day');
 
-		watch([mode, selectedProject, selectedAssignee, ganttZoom], ([newMode, newProject, newAssignee, newZoom]) => {
+		watch([mode, selectedProject, includeSubprojects, selectedAssignee, ganttZoom], ([newMode, newProject, newSub, newAssignee, newZoom]) => {
 			const query: Record<string, string> = { ...(route.value.query as Record<string, string>) };
 			if (newMode !== 'Tasks') query.mode = newMode;
 			else delete query.mode;
 
-			if (newProject !== '(All Projects)') query.project = newProject;
-			else delete query.project;
+			if (newProject !== '(All Projects)') {
+				query.project = newProject;
+				if (newSub && newProject !== '(No Project)') query.subprojects = '1';
+				else delete query.subprojects;
+			}
+			else {
+				delete query.project;
+				delete query.subprojects;
+			}
 
 			if (newAssignee !== '(All Assignees)') query.assignee = newAssignee;
 			else delete query.assignee;
@@ -207,6 +225,9 @@ export default defineComponent({
 			if (newQuery.project && newQuery.project !== selectedProject.value) selectedProject.value = newQuery.project as string;
 			if (!newQuery.project && selectedProject.value !== '(All Projects)') selectedProject.value = '(All Projects)';
 
+			const routeSub = newQuery.subprojects === '1';
+			if (routeSub !== includeSubprojects.value) includeSubprojects.value = routeSub;
+
 			if (newQuery.assignee && newQuery.assignee !== selectedAssignee.value) selectedAssignee.value = newQuery.assignee as string;
 			if (!newQuery.assignee && selectedAssignee.value !== '(All Assignees)') selectedAssignee.value = '(All Assignees)';
 
@@ -229,7 +250,12 @@ export default defineComponent({
 				result = result.filter(t => !t.project);
 			}
 			else if (selectedProject.value && selectedProject.value !== '(All Projects)') {
-				result = result.filter(t => t.project === selectedProject.value);
+				const proj = selectedProject.value;
+				if (includeSubprojects.value) {
+					result = result.filter(t => t.project === proj || (t.project && t.project.startsWith(proj + '.')));
+				} else {
+					result = result.filter(t => t.project === proj);
+				}
 			}
 
 			// Assignee filter
@@ -368,6 +394,7 @@ export default defineComponent({
 			mode,
 			allModes,
 			selectedProject,
+			includeSubprojects,
 			projectOptions,
 			selectedAssignee,
 			assigneeOptions,
