@@ -14,7 +14,7 @@
 
 **Purpose**: Baseline verification of branch and component entry points
 
-- [ ] T001 Verify clean test environment and target files in `frontend/` and `backend/`.
+- [x] T001 Verify clean test environment and target files in `frontend/` and `backend/`.
 
 ---
 
@@ -24,9 +24,9 @@
 **Independent Test**: Load tasks with descriptions containing `Doug:: double-check re: Thursday meeting`, `test::value`, and `http://example.com`; verify table and Kanban render smoothly and pagination functions without exceptions.
 
 ### Implementation Tasks
-- [ ] T002 [P] [US1] Create defensive URL validation and sanitization utility in `frontend/utils/linkify.ts` matching explicit schemes (`http://`, `https://`, `ftp://`) and `www.*` domains while rejecting pseudo-schemes like `Doug::`.
-- [ ] T003 [US1] Update `linkify` implementation in `frontend/components/TaskList.vue` to use the defensive utility with fallback to plain text.
-- [ ] T004 [US1] Update `linkify` implementation in `frontend/components/KanbanCard.vue` to use the defensive utility with fallback to plain text.
+- [x] T002 [P] [US1] Create defensive URL validation and sanitization utility in `frontend/utils/linkify.ts` matching explicit schemes (`http://`, `https://`, `ftp://`) and `www.*` domains while rejecting pseudo-schemes like `Doug::`.
+- [x] T003 [US1] Update `linkify` implementation in `frontend/components/TaskList.vue` to use the defensive utility with fallback to plain text.
+- [x] T004 [US1] Update `linkify` implementation in `frontend/components/KanbanCard.vue` to use the defensive utility with fallback to plain text.
 
 ---
 
@@ -36,10 +36,10 @@
 **Independent Test**: Create a project where all tasks are completed/deleted. Verify it is hidden by default in the project selector. Uncheck "Hide completed projects" in SettingsDialog and verify the completed project appears at the bottom under a divider.
 
 ### Implementation Tasks
-- [ ] T005 [P] [US2] Update Vuex store in `frontend/store/index.ts` to add getters for `activeProjects` (projects with at least one pending/waiting task) and `completedProjects` (projects where all tasks are completed or deleted).
-- [ ] T006 [P] [US2] Add `hideCompletedProjects: true` state, mutation, and `localStorage` persistence in `frontend/store/index.ts`.
-- [ ] T007 [US2] Add "Hide completed projects" checkbox in `frontend/components/SettingsDialog.vue`.
-- [ ] T008 [US2] Update `projectOptions` computed property in `frontend/pages/index.vue` to render active projects, and append divider + completed projects when `hideCompletedProjects` is false.
+- [x] T005 [P] [US2] Update Vuex store in `frontend/store/index.ts` to add getters for `activeProjects` (projects with at least one pending/waiting task) and `completedProjects` (projects where all tasks are completed or deleted).
+- [x] T006 [P] [US2] Add `hideCompletedProjects: true` state, mutation, and `localStorage` persistence in `frontend/store/index.ts`.
+- [x] T007 [US2] Add "Hide completed projects" checkbox in `frontend/components/SettingsDialog.vue`.
+- [x] T008 [US2] Update `projectOptions` computed property in `frontend/pages/index.vue` to render active projects, and append divider + completed projects when `hideCompletedProjects` is false.
 
 ---
 
@@ -49,8 +49,8 @@
 **Independent Test**: Run queries with theme includes in `.taskrc` or with color forcing; verify backend parses task list cleanly into JSON without formatting artifacts.
 
 ### Implementation Tasks
-- [ ] T009 [P] [US3] Update `backend/src/taskwarrior.ts` to enforce `rc._forcecolor=off` and `rc.defaultwidth=0` on Taskwarrior invocations.
-- [ ] T010 [US3] Add robust error handling around `taskwarrior.load()` in `backend/src/tasks.ts` to report clean structured error messages if `.taskrc` configuration errors occur.
+- [x] T009 [P] [US3] Update `backend/src/taskwarrior.ts` to enforce `rc._forcecolor=off` and `rc.defaultwidth=0` on Taskwarrior invocations.
+- [x] T010 [US3] Add robust error handling around `taskwarrior.load()` in `backend/src/tasks.ts` to report clean structured error messages if `.taskrc` configuration errors occur.
 
 ---
 
@@ -60,7 +60,7 @@
 **Independent Test**: On a mobile/narrow viewport emulation, trigger a validation error on due date in TaskDialog; verify the cursor remains properly aligned inside the text field without coordinate detachment.
 
 ### Implementation Tasks
-- [ ] T011 [US4] Update text field inputs in `frontend/components/TaskDialog.vue` with `hide-details="auto"` and stable container sizing to prevent layout shift on validation error display.
+- [x] T011 [US4] Update text field inputs in `frontend/components/TaskDialog.vue` with `hide-details="auto"` and stable container sizing to prevent layout shift on validation error display.
 
 ---
 
@@ -68,8 +68,8 @@
 
 **Purpose**: End-to-end integration and smoke verification across all fixed components
 
-- [ ] T012 Run frontend linter and typecheck (`npm run lint` / `npm run build` or equivalent).
-- [ ] T013 Verify complete Phase 1 bug fix user journeys across Table, Kanban, and Dialogs.
+- [x] T012 Run frontend linter and typecheck (`npm run lint` / `npm run build` or equivalent).
+- [x] T013 Verify complete Phase 1 bug fix user journeys across Table, Kanban, and Dialogs.
 
 ---
 
