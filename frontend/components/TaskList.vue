@@ -6,8 +6,13 @@
 			:text="confirmation.text"
 			@yes="confirmation.handler"
 		/>
-		<TaskDialog v-model="showTaskDialog" :task="currentTask || undefined" />
-		<ColumnDialog v-model="showColumnDialog" :active-columns="headers" />
+		<TaskDialog
+			v-model="showTaskDialog"
+			:task="currentTask || undefined"
+			:initial-project="activeFilterProject"
+			:initial-assignee="activeFilterAssignee"
+		/>
+		<ColumnDialog v-model="showColumnDialog" :active-columns="headers"/>
 		<v-row class="px-4 pt-4">
 			<v-btn-toggle v-model="selectedStatuses" multiple background-color="rgba(0, 0, 0, 0)">
 				<v-row class="pa-3">
@@ -37,55 +42,56 @@
 		</v-row>
 
 		<v-row class="px-4 pt-4">
-			<v-data-table
-				:items="displayedTasks"
-				:headers="filteredHeaders"
-				show-select
-				item-key="uuid"
-				:item-class="rowClass"
-				v-model="selected"
-				class="elevation-1"
-				style="width: 100%"
-			>
-				<template v-slot:top>
-					<v-row class="px-4">
-						<!-- Batch actions -->
-						<div class="pl-2 pt-2" v-show="selected.length">
-							<v-btn
-								v-show="hasPendingSelected"
-								class="ma-1 green"
-								fab
-								small
-								dark
-								title="Done"
-								@click="completeTasks(selected)"
-							>
-								<v-icon>mdi-check</v-icon>
-							</v-btn>
-							<v-btn
-								v-show="hasCompletedOrDeletedSelected"
-								class="ma-1"
-								color="primary"
-								fab
-								dark
-								small
-								title="Restore"
-								@click="restoreTasks(selected)"
-							>
-								<v-icon>mdi-restore</v-icon>
-							</v-btn>
-							<v-btn
-								v-show="hasNonDeletedSelected"
-								class="ma-1 red"
-								fab
-								dark
-								small
-								title="Delete"
-								@click="deleteTasks(selected)"
-							>
-								<v-icon>mdi-delete</v-icon>
-							</v-btn>
-						</div>
+		<v-data-table
+			:items="displayedTasks"
+			:headers="filteredHeaders"
+			:options.sync="tableOptions"
+			show-select
+			item-key="uuid"
+			:item-class="rowClass"
+			v-model="selected"
+			class="elevation-1"
+			style="width: 100%"
+		>
+			<template v-slot:top>
+				<v-row class="px-4">
+					<!-- Batch actions -->
+					<div class="pl-2 pt-2" v-show="selected.length">
+						<v-btn
+							v-show="hasPendingSelected"
+							class="ma-1 green"
+							fab
+							small
+							dark
+							title="Done"
+							@click="completeTasks(selected)"
+						>
+							<v-icon>mdi-check</v-icon>
+						</v-btn>
+						<v-btn
+							v-show="hasCompletedOrDeletedSelected"
+							class="ma-1"
+							color="primary"
+							fab
+							dark
+							small
+							title="Restore"
+							@click="restoreTasks(selected)"
+						>
+							<v-icon>mdi-restore</v-icon>
+						</v-btn>
+						<v-btn
+							v-show="hasNonDeletedSelected"
+							class="ma-1 red"
+							fab
+							dark
+							small
+							title="Delete"
+							@click="deleteTasks(selected)"
+						>
+							<v-icon>mdi-delete</v-icon>
+						</v-btn>
+					</div>
 
 						<v-spacer />
 
@@ -347,6 +353,18 @@ export default defineComponent({
 			return parts;
 		};
 
+		const activeFilterProject = computed(() => {
+			const p = route.value.query.project as string;
+			if (p && p !== '(All Projects)' && p !== '(No Project)') return p;
+			return '';
+		});
+
+		const activeFilterAssignee = computed(() => {
+			const a = route.value.query.assignee as string;
+			if (a && a !== '(All Assignees)' && a !== '(Unassigned)') return a;
+			return '';
+		});
+
 		const selectedStatuses = ref<string[]>(parseStatusQuery(route.value.query.status));
 
 		const updateStatusQuery = (statuses: string[]) => {
@@ -369,6 +387,50 @@ export default defineComponent({
 				router.replace({ query }).catch(() => {});
 			}
 		};
+
+		const defaultTableOptions = {
+			page: 1,
+			itemsPerPage: 10,
+			sortBy: ['urgency'],
+			sortDesc: [false],
+			groupBy: [],
+			groupDesc: [],
+			multiSort: false,
+			mustSort: false
+		};
+
+		const loadSavedTableOptions = () => {
+			if (typeof window === 'undefined') return { ...defaultTableOptions };
+			try {
+				const saved = localStorage.getItem('taskListOptions');
+				if (saved) {
+					const parsed = JSON.parse(saved);
+					return {
+						...defaultTableOptions,
+						...parsed
+					};
+				}
+			} catch (e) {
+				// Ignore parse error and return default
+			}
+			return { ...defaultTableOptions };
+		};
+
+		const tableOptions = ref(loadSavedTableOptions());
+
+		watch(tableOptions, (newOptions) => {
+			if (typeof window !== 'undefined' && newOptions) {
+				try {
+					localStorage.setItem('taskListOptions', JSON.stringify({
+						itemsPerPage: newOptions.itemsPerPage,
+						sortBy: newOptions.sortBy,
+						sortDesc: newOptions.sortDesc
+					}));
+				} catch (e) {
+					// Ignore storage errors
+				}
+			}
+		}, { deep: true });
 
 		const headers = computed(() => [
 			{ text: 'ID', value: 'id' },
@@ -640,6 +702,9 @@ export default defineComponent({
 
 		return {
 			activeTaskUuid,
+			activeFilterProject,
+			activeFilterAssignee,
+			tableOptions,
 			toggleTimer,
 			getTaskId,
 			getShortUuid,

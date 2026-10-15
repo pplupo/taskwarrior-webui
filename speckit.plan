@@ -1,81 +1,73 @@
-# Implementation Plan - Phase 1: Bug Fixes & Stability
+# Implementation Plan - Phase 2: UI Improvements & UX Polish
 
-**Branch**: `phase1-bug-fixes` | **Date**: 2026-10-14 | **Spec**: [speckit.specify](file:///home/pplupo/repos/webui2/speckit.specify)
+**Branch**: `phase2-ui-improvements` | **Date**: 2026-10-15 | **Spec**: [speckit.specify](file:///home/pplupo/repos/webui2/speckit.specify)
 
 ## Summary
-Resolve four core stability and usability issues identified from open bug reports:
-1. **#72 Fix URL Parsing Crash**: Prevent `TypeError: URL constructor: http:... is not a valid URL` when parsing task descriptions containing double colons (`::`) or malformed URL tokens in `TaskList.vue` and `KanbanCard.vue`.
-2. **#89 Completed Projects in Selector**: Group 100% completed projects at the bottom of the project selector below a divider, and provide a user setting in `SettingsDialog.vue` to optionally hide them entirely.
-3. **#59 Theme Include & CLI Data Fetching Robustness**: Ensure `taskwarrior-lib` execution in the Koa backend overrides formatting flags (`rc._forcecolor=off`, `rc.defaultwidth=0`) so theme directives or ANSI color codes never corrupt JSON parsing.
-4. **#90 Prevent Mobile (iOS) Input Offset**: Ensure form input containers in `TaskDialog.vue` maintain consistent layout during error state transitions to prevent WebKit virtual keyboard cursor/scroll offset desynchronization.
+Implement four high-value UX and workflow improvements:
+1. **#51 Pre-fill Project and Assignee on New Task**: Automatically pre-fill the Project and Assignee fields in `TaskDialog` from the active filters in `pages/index.vue` and `TaskList.vue`, falling back to `settings.assigneeName` for Assignee if no filter is active.
+2. **#77 Bulk Add (Brain Dump Mode)**: Support `Ctrl+Enter` / `Cmd+Enter` inside `TaskDialog` to immediately submit the task, reset description/annotations while retaining the active Project and Assignee, and refocus the description input for rapid sequential task entry.
+3. **#47 Date & Time Pickers for Task Dates**: Add append icons (`mdi-calendar-clock`) triggering a clean Vuetify date & time picker menu/dialog for `due`, `until`, `scheduled`, and `wait` fields while maintaining direct keyboard text entry for relative expressions.
+4. **#74 & #22 Remember Sorting Order & Frontend Preferences**: Synchronize `v-data-table` `options` (`sortBy`, `sortDesc`, `itemsPerPage`) with `localStorage` in `TaskList.vue` to preserve user sort preferences across reloads.
 
 ---
 
 ## Technical Context
-- **Backend**: Node.js, Koa.js, TypeScript, `taskwarrior-lib`.
-- **Frontend**: Vue 2, Nuxt.js (`@nuxtjs/composition-api`), Vuetify 2, `url-regex-safe`, `normalize-url`.
-- **Testing/Verification**: Unit checks, manual testing with sample task payloads (e.g. `Doug:: double-check re: Thursday meeting`, 100% completed project hierarchies, theme includes in `.taskrc`).
+- **Frontend Framework**: Vue 2 with `@nuxtjs/composition-api`, Vuetify 2, Vuex with `typed-vuex`.
+- **Target Components**:
+  - `frontend/components/TaskDialog.vue`: Pre-filling props, `Ctrl+Enter` shortcut listener, `v-date-picker` / `v-time-picker` menus.
+  - `frontend/components/TaskList.vue`: Table `options` watcher/storage, pre-fill arguments to `newTask()`.
+  - `frontend/pages/index.vue`: Top-level pre-fill passing for global `TaskDialog`.
 
 ---
 
 ## Constitution Check
-- [x] **Preserve Compatibility**: CLI invocation arguments maintain compatibility with Taskwarrior 2.x and 3.x.
-- [x] **Keyboard-First & High Accessibility**: Selector options and dialog focus are preserved.
-- [x] **Robust State Synchronization**: Safe normalization of URLs avoids frontend crashes; color overrides guarantee clean JSON from Taskwarrior.
-- [x] **Clean Vue 2 / Composition API Patterns**: Settings and project groupings utilize Vuex state and computed properties cleanly.
+- [x] **Preserve Compatibility**: Date format generated from pickers matches Taskwarrior ISO / standard date formats (`YYYY-MM-DDTHH:mm:ss` or `YYYY-MM-DD`), fully compatible with Taskwarrior CLI.
+- [x] **Keyboard-First & High Accessibility**: `Ctrl+Enter` creates a seamless keyboard loop for task entry without taking hands off the keyboard.
+- [x] **Robust State Synchronization**: Table options and dialog submissions sync reactively with Vuex and local persistence.
+- [x] **Clean Vue 2 / Composition API Patterns**: State remains encapsulated in `TaskDialog` and `TaskList` without cluttering the global store.
 
 ---
 
 ## Detailed Implementation Modules
 
-### 1. #72 Fix URL Parsing Crash (`frontend/components/TaskList.vue` & `frontend/components/KanbanCard.vue`)
-- **Current Defect**:
-  `linkify()` runs `urlRegex()` and calls `normalizeUrl(match[0])`. For strings like `"Doug:: double-check"`, regex matches `Doug::` as a pseudo-URL scheme, and `new URL('http:Doug::')` or `normalizeUrl` throws `TypeError: URL constructor: http:Doug:: is not a valid URL`, breaking table/list rendering and pagination.
-- **Implementation**:
-  - Restrict URL matching to valid web schemes (`http://`, `https://`, `ftp://`) or require standard domain delimiters.
-  - Wrap `normalizeUrl` and URL construction with a robust validator: only linkify if the URL constructor succeeds and parses a valid hostname/protocol.
-  - Fall back gracefully to plain text rather than corrupting the DOM or throwing uncaught exceptions.
+### 1. #51 Pre-fill Project and Assignee (`TaskDialog.vue`, `TaskList.vue`, `pages/index.vue`)
+- **Props**: Add `initialProject?: string` and `initialAssignee?: string` to `TaskDialog.vue`.
+- **Initialization**:
+  - When opening a new task (`props.task` is null/empty):
+    - Set `formData.project = props.initialProject || ''`.
+    - Set `formData.assignee = props.initialAssignee || store.state.settings.assigneeName || ''`.
+- **Caller Wiring**:
+  - In `pages/index.vue`: compute `currentActiveProject` (ignoring `(All Projects)` and `(No Project)`) and `currentActiveAssignee` (ignoring `(All Assignees)` and `(Unassigned)`). Pass them to `TaskDialog`.
+  - In `TaskList.vue`: pass active filter context or invoke new task with active project/assignee.
 
-### 2. #89 Completed Projects Separation & Toggle (`frontend/store/index.ts`, `frontend/pages/index.vue`, `frontend/components/SettingsDialog.vue`)
-- **Current Defect**:
-  Projects where all tasks are completed appear mixed in the project selector dropdown alongside active projects.
-- **Implementation**:
-  - In Vuex `store/index.ts` / getters, compute project completion status:
-    - `activeProjects`: projects having at least one task with `status: 'pending'` or `'waiting'`.
-    - `completedProjects`: projects where all associated tasks have `status: 'completed'` (or `'deleted'`).
-  - In `frontend/components/SettingsDialog.vue`:
-    - Add setting `hideCompletedProjects: boolean` (persisted in settings / `localStorage`).
-  - In `frontend/pages/index.vue` (`projectOptions`):
-    - When `hideCompletedProjects` is false:
-      - Return `['(All Projects)', '(No Project)', ...activeProjects, { divider: true }, ...completedProjects]`.
-    - When `hideCompletedProjects` is true:
-      - Return `['(All Projects)', '(No Project)', ...activeProjects]`.
-    - Ensure Vuetify `v-select` renders dividers properly using `item-text` / item objects or standard separator syntax.
+### 2. #77 Bulk Add Mode (`TaskDialog.vue`)
+- **Keyboard Handling**:
+  - Listen for `keydown` on the dialog form: if `(e.ctrlKey || e.metaKey) && e.key === 'Enter'`, trigger `saveAndContinue()`.
+- **Action Flow**:
+  - Validate form fields.
+  - If valid, dispatch task creation to Vuex / backend.
+  - Show quick success notification.
+  - Retain `formData.project` and `formData.assignee`.
+  - Clear `formData.description = ''`, `formData.customCommand = ''`, `formData.due = ''`, `formData.until = ''`, `formData.scheduled = ''`, `formData.wait = ''`, `formData.recur = ''`, `formData.annotations = []`, `formData.depends = []`, `formData.dependents = []`.
+  - Reset form validation states and re-focus the `Description` input field.
 
-### 3. #59 CLI Data Fetching & Theme Robustness (`backend/src/taskwarrior.ts` & `backend/src/tasks.ts`)
-- **Current Defect**:
-  When `.taskrc` includes a color theme (`include /path/to/theme.rc`), Taskwarrior may emit ANSI escape sequences or localized formatting that breaks `taskwarrior-lib`'s JSON parsing of task exports.
-- **Implementation**:
-  - Ensure Taskwarrior commands in `backend/src/` enforce `rc._forcecolor=off` and `rc.defaultwidth=0` when exporting tasks or querying JSON.
-  - Provide safe error handling in the API if CLI fails due to missing include files, returning a structured JSON error instead of crashing the Koa server.
+### 3. #47 Date & Time Pickers (`TaskDialog.vue`)
+- **Component Design**:
+  - For each date field (`due`, `until`, `scheduled`, `wait`), add an append icon `mdi-calendar-clock` to the `v-text-field`.
+  - Clicking the icon opens a `v-menu` with a `v-date-picker` (and optional time selection tab/toggle).
+  - Selecting a date automatically formats it into `YYYY-MM-DD` (or `YYYY-MM-DDTHH:mm:ss`) and updates the text field model.
+  - Direct typing remains fully operational for Taskwarrior shorthand (`tomorrow`, `eod`, etc.).
 
-### 4. #90 iOS Mobile Input Offset on Error (`frontend/components/TaskDialog.vue`)
-- **Current Defect**:
-  On mobile WebKit/iOS, triggering an error message expands the height of `v-text-field`, shifting input boundaries while the native soft keyboard viewport remains fixed, disconnecting touch target coordinates from visual cursor position.
-- **Implementation**:
-  - Set `hide-details="auto"` or wrap inputs in fixed-reserve layout containers to prevent layout jump on validation failure.
-  - Ensure touch events and autofocus scroll behavior preserve field alignment.
+### 4. #74 & #22 Remember Table Sorting & Options (`TaskList.vue`)
+- **Options Persistence**:
+  - Bind `v-data-table` `:options.sync="tableOptions"`.
+  - Initialize `tableOptions` from `localStorage.getItem('taskListOptions')` if present, with defaults (`sortBy: ['urgency']`, `sortDesc: [true]`, `itemsPerPage: 10`).
+  - Watch `tableOptions` (deep) and save changes to `localStorage.setItem('taskListOptions', JSON.stringify(val))`.
 
 ---
 
 ## Verification Strategy
-1. **#72 Verification**:
-   - Add tasks with double colons (e.g. `Doug:: double-check re: Thursday meeting`, `test::value`, `http://valid.com/test`) and verify list rendering, pagination, Kanban view, and links without exceptions.
-2. **#89 Verification**:
-   - Create a project with only completed tasks.
-   - Verify it appears at the bottom under a divider in the dropdown.
-   - Toggle "Hide completed projects" in Settings and verify it disappears immediately.
-3. **#59 Verification**:
-   - Verify backend exports tasks cleanly when color themes are configured or simulated with `rc._forcecolor=on`.
-4. **#90 Verification**:
-   - Test `TaskDialog` validation error trigger on narrow viewports/mobile emulation and verify layout stability.
+1. **#51 Verification**: Filter by a project and assignee in the top controls, click "New Task", and verify both fields are pre-filled. Clear filters and verify Assignee falls back to `settings.assigneeName`.
+2. **#77 Verification**: In New Task dialog, type description, press `Ctrl+Enter`. Verify task is saved and dialog stays open with Description cleared, Project/Assignee retained, and cursor focused in Description.
+3. **#47 Verification**: Open date picker menu on Due date, pick a day, verify date string is populated into the field. Type relative date `tomorrow` directly, verify field accepts it.
+4. **#74 & #22 Verification**: Change sorting to Description descending and items-per-page to 25. Refresh page, verify table retains Description descending and 25 items per page.

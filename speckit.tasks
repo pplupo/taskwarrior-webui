@@ -1,12 +1,12 @@
-# Tasks: Phase 1 Bug Fixes & Stability
+# Tasks: Phase 2 UI Improvements & UX Polish
 
 **Input**: Design documents from `speckit.specify` and `speckit.plan`
-**Target Branch**: `phase1-bug-fixes` (`/home/pplupo/repos/webui2`)
+**Target Branch**: `phase2-ui-improvements` (`/home/pplupo/repos/webui2`)
 **Prerequisites**: speckit.plan (required), speckit.specify (required)
 
 ## Format: `[ID] [P?] [Story] Description`
 - **[P]**: Can run in parallel (different files/modules, no direct dependencies)
-- **[Story]**: Target bug fix / user story (US1: #72 URL Crash, US2: #89 Completed Projects, US3: #59 CLI Data Robustness, US4: #90 Mobile Input Offset)
+- **[Story]**: Target user story / feature (US1: #51 Pre-fill Project & Assignee, US2: #77 Bulk Add Mode, US3: #47 Date & Time Pickers, US4: #74 & #22 Remember Sorting & Options)
 
 ---
 
@@ -14,62 +14,61 @@
 
 **Purpose**: Baseline verification of branch and component entry points
 
-- [x] T001 Verify clean test environment and target files in `frontend/` and `backend/`.
+- [x] T001 Verify clean test environment and target components in `frontend/`.
 
 ---
 
-## Phase 2: User Story 1 - Fix URL Parsing Crash on Double Colons (Priority: P1) 🎯 MVP
+## Phase 2: User Story 1 - Pre-fill Project & Assignee on New Task (Priority: P1) 🎯 MVP
 
-**Goal**: Prevent list view crashes caused by invalid URL parsing when task titles contain double colons (`::`) or malformed strings (#72).
-**Independent Test**: Load tasks with descriptions containing `Doug:: double-check re: Thursday meeting`, `test::value`, and `http://example.com`; verify table and Kanban render smoothly and pagination functions without exceptions.
+**Goal**: Automatically populate Project and Assignee in TaskDialog based on active view filters and user settings fallback (#51).
+**Independent Test**: Filter by a project and assignee in the UI and open the New Task dialog; verify Project and Assignee are pre-filled. Clear filters and verify Assignee pre-fills from `settings.assigneeName`.
 
 ### Implementation Tasks
-- [x] T002 [P] [US1] Create defensive URL validation and sanitization utility in `frontend/utils/linkify.ts` matching explicit schemes (`http://`, `https://`, `ftp://`) and `www.*` domains while rejecting pseudo-schemes like `Doug::`.
-- [x] T003 [US1] Update `linkify` implementation in `frontend/components/TaskList.vue` to use the defensive utility with fallback to plain text.
-- [x] T004 [US1] Update `linkify` implementation in `frontend/components/KanbanCard.vue` to use the defensive utility with fallback to plain text.
+- [x] T002 [P] [US1] Add `initialProject` and `initialAssignee` props to `frontend/components/TaskDialog.vue` and update form initialization to respect them with fallback to `store.state.settings.assigneeName`.
+- [x] T003 [US1] Update `frontend/pages/index.vue` to compute active project and assignee and pass them to `TaskDialog`.
+- [x] T004 [US1] Update `newTask` trigger in `frontend/components/TaskList.vue` to preserve active filter context.
 
 ---
 
-## Phase 3: User Story 2 - Completed Projects Separation & Setting Toggle (Priority: P1) 🎯 MVP
+## Phase 3: User Story 2 - Bulk Add (Brain Dump Mode) (Priority: P1) 🎯 MVP
 
-**Goal**: Place 100% completed projects below a divider in the project selector and allow hiding them completely via a user setting, default hidden (#89).
-**Independent Test**: Create a project where all tasks are completed/deleted. Verify it is hidden by default in the project selector. Uncheck "Hide completed projects" in SettingsDialog and verify the completed project appears at the bottom under a divider.
+**Goal**: Support `Ctrl+Enter` / `Cmd+Enter` inside TaskDialog to save and immediately prepare the dialog for consecutive task entry (#77).
+**Independent Test**: Open New Task dialog, fill Description and dates, press `Ctrl+Enter`; verify task is saved, Description/annotations are cleared, Project/Assignee are retained, and cursor refocuses on Description.
 
 ### Implementation Tasks
-- [x] T005 [P] [US2] Update Vuex store in `frontend/store/index.ts` to add getters for `activeProjects` (projects with at least one pending/waiting task) and `completedProjects` (projects where all tasks are completed or deleted).
-- [x] T006 [P] [US2] Add `hideCompletedProjects: true` state, mutation, and `localStorage` persistence in `frontend/store/index.ts`.
-- [x] T007 [US2] Add "Hide completed projects" checkbox in `frontend/components/SettingsDialog.vue`.
-- [x] T008 [US2] Update `projectOptions` computed property in `frontend/pages/index.vue` to render active projects, and append divider + completed projects when `hideCompletedProjects` is false.
+- [x] T005 [US2] Implement `saveAndContinue` method in `frontend/components/TaskDialog.vue` to validate, dispatch task creation, retain Project/Assignee, reset other fields, and retain focus.
+- [x] T006 [US2] Add keyboard shortcut listener for `(e.ctrlKey || e.metaKey) && e.key === 'Enter'` in `frontend/components/TaskDialog.vue` to trigger `saveAndContinue`.
 
 ---
 
-## Phase 4: User Story 3 - Theme Include & CLI Data Fetching Robustness (Priority: P2)
+## Phase 4: User Story 3 - Date & Time Pickers for Task Dates (Priority: P2)
 
-**Goal**: Ensure Taskwarrior CLI output formatting and color themes never corrupt backend JSON data fetching (#59).
-**Independent Test**: Run queries with theme includes in `.taskrc` or with color forcing; verify backend parses task list cleanly into JSON without formatting artifacts.
+**Goal**: Add append-icon date and time picker menus to date inputs in TaskDialog while keeping text inputs operational (#47).
+**Independent Test**: Open TaskDialog, click the calendar icon beside `due`, pick a date from the picker, and verify the formatted date string is populated into the field. Type `tomorrow` into `scheduled` directly and verify text entry works without obstruction.
 
 ### Implementation Tasks
-- [x] T009 [P] [US3] Update `backend/src/taskwarrior.ts` to enforce `rc._forcecolor=off` and `rc.defaultwidth=0` on Taskwarrior invocations.
-- [x] T010 [US3] Add robust error handling around `taskwarrior.load()` in `backend/src/tasks.ts` to report clean structured error messages if `.taskrc` configuration errors occur.
+- [x] T007 [P] [US3] Create date/time picker menu popups (`v-menu` with `v-date-picker`) on `due`, `until`, `scheduled`, and `wait` fields in `frontend/components/TaskDialog.vue`.
+- [x] T008 [US3] Format selected dates from picker into `YYYY-MM-DD` and wire reactivity back to `formData`.
 
 ---
 
-## Phase 5: User Story 4 - Prevent Mobile (iOS) Input Offset (Priority: P2)
+## Phase 5: User Story 4 - Remember Sorting Order & Frontend Preferences (Priority: P2)
 
-**Goal**: Eliminate input field coordinate and cursor offset desynchronization during validation errors on mobile devices (#90).
-**Independent Test**: On a mobile/narrow viewport emulation, trigger a validation error on due date in TaskDialog; verify the cursor remains properly aligned inside the text field without coordinate detachment.
+**Goal**: Persist table sorting order, sort direction, and rows per page across page reloads via `localStorage` (#74, #22).
+**Independent Test**: In TaskList view, change table sorting to Priority descending and items per page to 25. Refresh the browser; verify table options are restored from `localStorage`.
 
 ### Implementation Tasks
-- [x] T011 [US4] Update text field inputs in `frontend/components/TaskDialog.vue` with `hide-details="auto"` and stable container sizing to prevent layout shift on validation error display.
+- [x] T009 [P] [US4] Bind `:options.sync="tableOptions"` on `v-data-table` in `frontend/components/TaskList.vue`.
+- [x] T010 [US4] Add `localStorage` loading on mount and reactive watcher to save `tableOptions` (`sortBy`, `sortDesc`, `itemsPerPage`).
 
 ---
 
 ## Phase 6: Polish & Cross-Cutting Verification
 
-**Purpose**: End-to-end integration and smoke verification across all fixed components
+**Purpose**: End-to-end integration and smoke verification across all updated components
 
-- [x] T012 Run frontend linter and typecheck (`npm run lint` / `npm run build` or equivalent).
-- [x] T013 Verify complete Phase 1 bug fix user journeys across Table, Kanban, and Dialogs.
+- [x] T011 Run frontend build and linter checks (`npm run build`).
+- [x] T012 Verify complete Phase 2 user journeys: pre-fill, bulk add loop, date pickers, and persistent sorting.
 
 ---
 
@@ -77,26 +76,24 @@
 
 ```mermaid
 flowchart TD
-    T001[T001: Environment Check] --> T002[T002: URL Utility]
-    T001 --> T005[T005: Store Project Getters]
-    T001 --> T006[T006: Store Settings State]
-    T001 --> T009[T009: Backend CLI Flags]
-    T001 --> T011[T011: Mobile Input Layout]
+    T001[T001: Environment Check] --> T002[T002: TaskDialog Props]
+    T001 --> T007[T007: Date Picker Popups]
+    T001 --> T009[T009: Table Options Binding]
 
-    T002 --> T003[T003: TaskList Linkify]
-    T002 --> T004[T004: KanbanCard Linkify]
+    T002 --> T003[T003: index.vue Pre-fill Wiring]
+    T002 --> T004[T004: TaskList Pre-fill Wiring]
+    T002 --> T005[T005: Bulk Add Method]
 
-    T005 --> T008[T008: Project Options Dropdown]
-    T006 --> T007[T007: Settings Dialog Checkbox]
-    T006 --> T008
+    T005 --> T006[T006: Ctrl+Enter Listener]
 
-    T009 --> T010[T010: Backend Error Handling]
+    T007 --> T008[T008: Date Formatting & Sync]
 
-    T003 --> T012[T012: Build & Lint Checks]
-    T004 --> T012
-    T007 --> T012
-    T008 --> T012
-    T010 --> T012
-    T011 --> T012
-    T012 --> T013[T013: Final E2E Verification]
+    T009 --> T010[T010: localStorage Persistence]
+
+    T003 --> T011[T011: Build & Lint Checks]
+    T004 --> T011
+    T006 --> T011
+    T008 --> T011
+    T010 --> T011
+    T011 --> T012[T012: Final E2E Verification]
 ```

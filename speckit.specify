@@ -1,34 +1,36 @@
-# Specification - Phase 1: Bug Fixes & Stability
+# Specification - Phase 2: UI Improvements & UX Polish
 
 ## Requirements
 
-Implement high-priority bug fixes and stability improvements:
+Implement core Taskwarrior WebUI UX improvements:
 
-1. **#72 Fix URL Parsing Crash on Double Colon / Complex Titles**:
-   - Tasks containing double colons (e.g. `Doug:: double-check re: Thursday meeting`) or colon-delimited text crash list views with `TypeError: URL constructor: http:Doug:: is not a valid URL`.
-   - Safely validate URLs before calling URL constructors: match URLs with explicit schemes (`http://`, `https://`, `ftp://`) and `www.*` domain patterns, ignoring stray colons or custom pseudo-schemes like `Doug::`.
-   - Wrap parsing in a defensive validation helper that catches URL constructor failures and safely falls back to plain text.
+1. **#51 Pre-fill Project and Assignee on New Task**:
+   - When the user is viewing a filtered project in the UI and clicks to add a new task, the "Project" field in the task creation dialog must be pre-filled with the active project (ignoring `(All Projects)` and `(No Project)`).
+   - When an assignee filter is active (ignoring `(All Assignees)` and `(Unassigned)`), pre-fill the "Assignee" field in the new task modal with the filtered assignee.
+   - Fallback: If no specific assignee filter is active, pre-fill Assignee from the default `assigneeName` configured in user Settings (`store.state.settings.assigneeName`), if present.
 
-2. **#89 Handle 100% Completed Projects in Selector**:
-   - Qualify a project as completed/inactive when 100% of tasks in that project have status `completed` (or all tasks are `completed`/`deleted` with no `pending` or `waiting` tasks remaining).
-   - In the project selector dropdown, place completed projects at the end of the list separated by a clear visual divider / separator.
-   - Add a setting / checkbox in `SettingsDialog.vue` to hide completed projects from the project selector, with **default value set to `true`** (hidden by default unless toggled off).
+2. **#77 Bulk Add (Brain Dump Mode)**:
+   - Streamline rapid successive task entry inside the "Add Task" modal.
+   - Support keyboard shortcut `Ctrl+Enter` (or `Cmd+Enter` on macOS) to save the current task immediately and keep the modal open with focus returned to the Description field for the next entry.
+   - In Bulk Add mode, retain the currently selected `Project` and `Assignee` across successive entries, while resetting `Description`, `customCommand`, `annotations`, `depends`, and dates.
+   - Standard `Enter` (or clicking "Save") saves the task and closes the dialog.
 
-3. **#59 Theme Include & CLI Data Fetching Robustness**:
-   - Address failures where Taskwarrior configurations with theme includes or output formatting disrupt JSON data fetching.
-   - Ensure backend task queries enforce color suppression (`rc._forcecolor=off`, `rc.defaultwidth=0`) so theme directives and ANSI escape codes do not corrupt parsed task outputs.
+3. **#47 Date & Time Pickers for Task Dates**:
+   - Integrate Vuetify date & time picker popups / menus (`v-date-picker` / `v-time-picker`) beside date fields (`due`, `until`, `scheduled`, `wait`) triggered by calendar/clock append icons.
+   - Preserve direct text editing so users can still type relative Taskwarrior date strings (e.g. `tomorrow`, `eod`, `friday`, `2d`).
 
-4. **#90 Prevent Input Field Offset on Mobile (iOS)**:
-   - Fix issue where mobile (iOS WebKit) virtual keyboard and input cursor become disconnected / offset after field validation errors.
-   - Adjust input validation layout and container properties (e.g. `hide-details="auto"` or stable input slot dimensions) so viewport scroll re-calculation preserves correct cursor/focus alignment.
+4. **#74 & #22 Remember Sorting Order & Frontend Preferences**:
+   - Persist user frontend table options across page reloads using `localStorage`.
+   - Store table sorting options (sort column `sortBy`, sort descending `sortDesc`, and rows per page `itemsPerPage`).
+   - Restore table options seamlessly on page load without layout shift or UI flickering.
 
 ## Clarifications & Decisions
-- **Project Completion Criteria (#89)**: A project is completed when all its tasks have status `completed` or `deleted` (no active `pending` or `waiting` tasks).
-- **Default Setting (#89)**: "Hide completed projects" defaults to `true`. When disabled by user, completed projects appear under a separator at the bottom of the list.
-- **Linkification Pattern (#72)**: Only match URLs with explicit schemes (`http://`, `https://`, `ftp://`) or standard `www.*` hostnames. Non-URL colons (`::`) must never be treated as URL schemes.
+- **Date/Time Picker Integration (#47)**: Keep text fields for direct input, and add an icon button on each date input to open a `v-menu` with date/time pickers that formats the selected date into the field.
+- **Bulk Add State Retention (#77)**: On `Ctrl+Enter`, save the task, clear Description and annotations, but keep Project and Assignee populated for fast entry under the same context.
+- **Pre-fill Fallback (#51)**: Active filter takes precedence. If no filter is active, Assignee falls back to `settings.assigneeName`.
 
 ## User Stories
-- As a user with task titles containing colons, double colons, or notes, I want the task list to render without crashing on URL parsing.
-- As a user managing many completed projects, I want completed projects hidden by default, or grouped below a divider in the project selector when toggled visible in settings.
-- As a user with themes or customized `.taskrc` configurations, I want the web interface to reliably fetch and parse task data without JSON decoding errors.
-- As a mobile user on iOS, I want input fields to remain aligned with the cursor even after validation errors occur.
+- As a user entering tasks under a specific project and assignee, I want those fields automatically pre-filled so I don't have to retype them repeatedly.
+- As a user doing a brain dump of multiple tasks, I want to press `Ctrl+Enter` to rapidly submit task after task without having to reopen the dialog each time.
+- As a user scheduling deadlines, I want visual date/time pickers to select dates accurately while still having the freedom to type relative date shortcuts.
+- As a user who customized column sorting and page sizes, I want those preferences remembered across browser sessions.
