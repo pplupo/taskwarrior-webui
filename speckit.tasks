@@ -2,48 +2,101 @@
 
 **Input**: Design documents from `speckit.specify` and `speckit.plan`
 **Target Branch**: `phase1-bug-fixes` (`/home/pplupo/repos/webui2`)
+**Prerequisites**: speckit.plan (required), speckit.specify (required)
+
+## Format: `[ID] [P?] [Story] Description`
+- **[P]**: Can run in parallel (different files/modules, no direct dependencies)
+- **[Story]**: Target bug fix / user story (US1: #72 URL Crash, US2: #89 Completed Projects, US3: #59 CLI Data Robustness, US4: #90 Mobile Input Offset)
 
 ---
 
-## Phase 1: #72 Fix URL Parsing Crash on Double Colons & Complex Titles
+## Phase 1: Setup & Foundational Prerequisites
 
-**Goal**: Prevent list view crashes caused by invalid URL parsing when task titles contain double colons (`::`) or malformed strings.
+**Purpose**: Baseline verification of branch and component entry points
 
-### Implementation Tasks
-- [ ] T001 [P] Extract/refactor robust URL detection and sanitization helper in `frontend/utils/linkify.ts` (or local helper) requiring explicit schemes (`http://`, `https://`, `ftp://`) and `www.*` domains, ignoring pseudo-schemes like `Doug::`.
-- [ ] T002 Update `frontend/components/TaskList.vue` to use the defensive linkification helper with URL constructor try/catch and fallback to plain text.
-- [ ] T003 Update `frontend/components/KanbanCard.vue` to use the defensive linkification helper.
-- [ ] T004 Verify rendering and pagination with tasks containing colons, double colons, and valid URLs.
+- [ ] T001 Verify clean test environment and target files in `frontend/` and `backend/`.
 
 ---
 
-## Phase 2: #89 100% Completed Projects Separation & Setting Toggle
+## Phase 2: User Story 1 - Fix URL Parsing Crash on Double Colons (Priority: P1) 🎯 MVP
 
-**Goal**: Place 100% completed projects below a divider in the project selector and allow hiding them completely via a user setting (defaulting to hidden).
+**Goal**: Prevent list view crashes caused by invalid URL parsing when task titles contain double colons (`::`) or malformed strings (#72).
+**Independent Test**: Load tasks with descriptions containing `Doug:: double-check re: Thursday meeting`, `test::value`, and `http://example.com`; verify table and Kanban render smoothly and pagination functions without exceptions.
 
 ### Implementation Tasks
-- [ ] T005 [P] Update Vuex store in `frontend/store/index.ts` to add computed getters for `activeProjects` (projects with at least one pending/waiting task) and `completedProjects` (projects where all tasks are completed/deleted).
-- [ ] T006 Add `hideCompletedProjects: true` to settings state, mutations, and persistent storage in `frontend/store/index.ts`.
-- [ ] T007 Add "Hide completed projects" checkbox in `frontend/components/SettingsDialog.vue`.
-- [ ] T008 Update `projectOptions` in `frontend/pages/index.vue` to respect `hideCompletedProjects`: when false, append `{ divider: true }` and `completedProjects`; when true, only display active projects.
-- [ ] T009 Verify project selector displays items as expected with settings toggled on and off.
+- [ ] T002 [P] [US1] Create defensive URL validation and sanitization utility in `frontend/utils/linkify.ts` matching explicit schemes (`http://`, `https://`, `ftp://`) and `www.*` domains while rejecting pseudo-schemes like `Doug::`.
+- [ ] T003 [US1] Update `linkify` implementation in `frontend/components/TaskList.vue` to use the defensive utility with fallback to plain text.
+- [ ] T004 [US1] Update `linkify` implementation in `frontend/components/KanbanCard.vue` to use the defensive utility with fallback to plain text.
 
 ---
 
-## Phase 3: #59 Theme Include & CLI Data Fetching Robustness
+## Phase 3: User Story 2 - Completed Projects Separation & Setting Toggle (Priority: P1) 🎯 MVP
 
-**Goal**: Ensure Taskwarrior CLI output formatting and color themes never break backend JSON parsing.
+**Goal**: Place 100% completed projects below a divider in the project selector and allow hiding them completely via a user setting, default hidden (#89).
+**Independent Test**: Create a project where all tasks are completed/deleted. Verify it is hidden by default in the project selector. Uncheck "Hide completed projects" in SettingsDialog and verify the completed project appears at the bottom under a divider.
 
 ### Implementation Tasks
-- [ ] T010 [P] Update `backend/src/taskwarrior.ts` to enforce `rc._forcecolor=off` and `rc.defaultwidth=0` on Taskwarrior invocations.
-- [ ] T011 Verify task loading and modification endpoints in `backend/src/tasks.ts` handle theme directives and CLI output reliably.
+- [ ] T005 [P] [US2] Update Vuex store in `frontend/store/index.ts` to add getters for `activeProjects` (projects with at least one pending/waiting task) and `completedProjects` (projects where all tasks are completed or deleted).
+- [ ] T006 [P] [US2] Add `hideCompletedProjects: true` state, mutation, and `localStorage` persistence in `frontend/store/index.ts`.
+- [ ] T007 [US2] Add "Hide completed projects" checkbox in `frontend/components/SettingsDialog.vue`.
+- [ ] T008 [US2] Update `projectOptions` computed property in `frontend/pages/index.vue` to render active projects, and append divider + completed projects when `hideCompletedProjects` is false.
 
 ---
 
-## Phase 4: #90 Prevent Input Field Offset on Mobile (iOS)
+## Phase 4: User Story 3 - Theme Include & CLI Data Fetching Robustness (Priority: P2)
 
-**Goal**: Eliminate input field coordinate and cursor offset desynchronization during validation errors on mobile devices.
+**Goal**: Ensure Taskwarrior CLI output formatting and color themes never corrupt backend JSON data fetching (#59).
+**Independent Test**: Run queries with theme includes in `.taskrc` or with color forcing; verify backend parses task list cleanly into JSON without formatting artifacts.
 
 ### Implementation Tasks
-- [ ] T012 Update `frontend/components/TaskDialog.vue` text fields with consistent layout containers or `hide-details="auto"` to prevent layout shifting on error messages.
-- [ ] T013 Verify dialog input stability across validation error states on mobile viewports.
+- [ ] T009 [P] [US3] Update `backend/src/taskwarrior.ts` to enforce `rc._forcecolor=off` and `rc.defaultwidth=0` on Taskwarrior invocations.
+- [ ] T010 [US3] Add robust error handling around `taskwarrior.load()` in `backend/src/tasks.ts` to report clean structured error messages if `.taskrc` configuration errors occur.
+
+---
+
+## Phase 5: User Story 4 - Prevent Mobile (iOS) Input Offset (Priority: P2)
+
+**Goal**: Eliminate input field coordinate and cursor offset desynchronization during validation errors on mobile devices (#90).
+**Independent Test**: On a mobile/narrow viewport emulation, trigger a validation error on due date in TaskDialog; verify the cursor remains properly aligned inside the text field without coordinate detachment.
+
+### Implementation Tasks
+- [ ] T011 [US4] Update text field inputs in `frontend/components/TaskDialog.vue` with `hide-details="auto"` and stable container sizing to prevent layout shift on validation error display.
+
+---
+
+## Phase 6: Polish & Cross-Cutting Verification
+
+**Purpose**: End-to-end integration and smoke verification across all fixed components
+
+- [ ] T012 Run frontend linter and typecheck (`npm run lint` / `npm run build` or equivalent).
+- [ ] T013 Verify complete Phase 1 bug fix user journeys across Table, Kanban, and Dialogs.
+
+---
+
+## Dependencies & Execution Graph
+
+```mermaid
+flowchart TD
+    T001[T001: Environment Check] --> T002[T002: URL Utility]
+    T001 --> T005[T005: Store Project Getters]
+    T001 --> T006[T006: Store Settings State]
+    T001 --> T009[T009: Backend CLI Flags]
+    T001 --> T011[T011: Mobile Input Layout]
+
+    T002 --> T003[T003: TaskList Linkify]
+    T002 --> T004[T004: KanbanCard Linkify]
+
+    T005 --> T008[T008: Project Options Dropdown]
+    T006 --> T007[T007: Settings Dialog Checkbox]
+    T006 --> T008
+
+    T009 --> T010[T010: Backend Error Handling]
+
+    T003 --> T012[T012: Build & Lint Checks]
+    T004 --> T012
+    T007 --> T012
+    T008 --> T012
+    T010 --> T012
+    T011 --> T012
+    T012 --> T013[T013: Final E2E Verification]
+```
