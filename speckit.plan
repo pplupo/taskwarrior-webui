@@ -1,73 +1,66 @@
-# Implementation Plan - Phase 2: UI Improvements & UX Polish
+# Implementation Plan - Phase 3: Configurations & Architecture
 
-**Branch**: `phase2-ui-improvements` | **Date**: 2026-10-15 | **Spec**: [speckit.specify](file:///home/pplupo/repos/webui2/speckit.specify)
+## Architecture & Tech Stack
+- **Target Fork**: https://github.com/pplupo/taskwarrior-webui (branch `phase3-configs`)
+- **Backend**: Node.js, Koa.js, TypeScript, taskwarrior-lib CLI wrapper.
+- **Frontend**: Vue 2 (Composition API), Nuxt.js, Vuetify (Material Design), Vuex (typed-vuex).
 
-## Summary
-Implement four high-value UX and workflow improvements:
-1. **#51 Pre-fill Project and Assignee on New Task**: Automatically pre-fill the Project and Assignee fields in `TaskDialog` from the active filters in `pages/index.vue` and `TaskList.vue`, falling back to `settings.assigneeName` for Assignee if no filter is active.
-2. **#77 Bulk Add (Brain Dump Mode)**: Support `Ctrl+Enter` / `Cmd+Enter` inside `TaskDialog` to immediately submit the task, reset description/annotations while retaining the active Project and Assignee, and refocus the description input for rapid sequential task entry.
-3. **#47 Date & Time Pickers for Task Dates**: Add append icons (`mdi-calendar-clock`) triggering a clean Vuetify date & time picker menu/dialog for `due`, `until`, `scheduled`, and `wait` fields while maintaining direct keyboard text entry for relative expressions.
-4. **#74 & #22 Remember Sorting Order & Frontend Preferences**: Synchronize `v-data-table` `options` (`sortBy`, `sortDesc`, `itemsPerPage`) with `localStorage` in `TaskList.vue` to preserve user sort preferences across reloads.
+## Proposed Architectural Modules
 
----
+### 1. Reverse Proxy & Deployment Configuration (#88, #92)
+- **Base Path Routing (`#88`)**:
+  - `frontend/nuxt.config.js`:
+    - Read `process.env.ROUTER_BASE_PATH` (default `/`), configuring `router: { base: basePath }`.
+    - Configure `axios: { baseURL: basePath === '/' ? '/' : `${basePath}/` }`.
+    - Set up proxy or API rewrite so calls to `${basePath}api` forward to backend.
+  - `backend/src/app.ts`:
+    - Support base path prefix mounting in Koa router if specified via `process.env.ROUTER_BASE_PATH`, or allow matching both `/api/...` and `${basePath}api/...`.
+  - `nginx/server.conf` & `docker/start.sh`:
+    - Update `start.sh` and Nginx template to support environment variables `PORT` (default 80) and `ROUTER_BASE_PATH` (default `/`).
+- **Configurable Port (`#92`)**:
+  - `backend/src/app.ts`:
+    - Read `process.env.PORT` (or `APP_PORT`), defaulting to 3000.
+  - `docker/start.sh`:
+    - Substitute `$PORT` into `/etc/nginx/conf.d/default.conf` (listen on `$PORT`).
 
-## Technical Context
-- **Frontend Framework**: Vue 2 with `@nuxtjs/composition-api`, Vuetify 2, Vuex with `typed-vuex`.
-- **Target Components**:
-  - `frontend/components/TaskDialog.vue`: Pre-filling props, `Ctrl+Enter` shortcut listener, `v-date-picker` / `v-time-picker` menus.
-  - `frontend/components/TaskList.vue`: Table `options` watcher/storage, pre-fill arguments to `newTask()`.
-  - `frontend/pages/index.vue`: Top-level pre-fill passing for global `TaskDialog`.
+### 2. Multi-Profile Architecture (#96)
+- **Backend Profile Manager (`backend/src/profiles.ts` & `backend/src/taskwarrior.ts`)**:
+  - Parse `process.env.TASK_PROFILES` (format: `Name:rc_path:data_path,Name2:rc_path2:data_path2` or JSON).
+  - Default profile: `Default` using `process.env.TASKRC || '/.taskrc'` and `process.env.TASKDATA || '/.task'`.
+  - Provide helper `getTaskwarrior(profileName?: string): TaskwarriorLib` that caches instances by profile.
+  - Add middleware to extract profile from `X-Taskwarrior-Profile` request header or query parameter `profile`.
+  - Endpoints in `backend/src/profiles.ts`:
+    - `GET /config/profiles`: returns list of available profile names and default profile.
+- **Frontend Profile Switching**:
+  - Store state `currentProfile` and `profiles` list in `frontend/store/index.ts`.
+  - Fetch profiles on initial load; if `profiles.length > 1`, display Profile selector in `frontend/layouts/default.vue`.
+  - Axios interceptor in Nuxt plugin/store attaching `X-Taskwarrior-Profile` to outgoing requests.
+  - Persist selection to `localStorage.getItem('taskwarrior_profile')`.
 
----
+### 3. Context Support (#18)
+- **Backend Context Endpoints (`backend/src/contexts.ts`)**:
+  - `GET /config/contexts`: runs `task _context` to list contexts, and `task _get rc.context` to get active context.
+  - `POST /config/contexts`: accepts `{ context: string }`. Runs `task context <name>` (or `task context none` if empty/none).
+  - Context override in `taskwarrior-lib` execution: if `X-Taskwarrior-Context` header is present, pass `rc.context=<name>` to Taskwarrior CLI invocations.
+- **Frontend Context UI**:
+  - Store state `activeContext` and `contexts` list.
+  - Top-bar Context menu/select in `frontend/layouts/default.vue` showing currently active context and dropdown to switch context or clear context.
+  - When switched, invoke `POST /config/contexts` and reload task lists.
 
-## Constitution Check
-- [x] **Preserve Compatibility**: Date format generated from pickers matches Taskwarrior ISO / standard date formats (`YYYY-MM-DDTHH:mm:ss` or `YYYY-MM-DD`), fully compatible with Taskwarrior CLI.
-- [x] **Keyboard-First & High Accessibility**: `Ctrl+Enter` creates a seamless keyboard loop for task entry without taking hands off the keyboard.
-- [x] **Robust State Synchronization**: Table options and dialog submissions sync reactively with Vuex and local persistence.
-- [x] **Clean Vue 2 / Composition API Patterns**: State remains encapsulated in `TaskDialog` and `TaskList` without cluttering the global store.
-
----
-
-## Detailed Implementation Modules
-
-### 1. #51 Pre-fill Project and Assignee (`TaskDialog.vue`, `TaskList.vue`, `pages/index.vue`)
-- **Props**: Add `initialProject?: string` and `initialAssignee?: string` to `TaskDialog.vue`.
-- **Initialization**:
-  - When opening a new task (`props.task` is null/empty):
-    - Set `formData.project = props.initialProject || ''`.
-    - Set `formData.assignee = props.initialAssignee || store.state.settings.assigneeName || ''`.
-- **Caller Wiring**:
-  - In `pages/index.vue`: compute `currentActiveProject` (ignoring `(All Projects)` and `(No Project)`) and `currentActiveAssignee` (ignoring `(All Assignees)` and `(Unassigned)`). Pass them to `TaskDialog`.
-  - In `TaskList.vue`: pass active filter context or invoke new task with active project/assignee.
-
-### 2. #77 Bulk Add Mode (`TaskDialog.vue`)
-- **Keyboard Handling**:
-  - Listen for `keydown` on the dialog form: if `(e.ctrlKey || e.metaKey) && e.key === 'Enter'`, trigger `saveAndContinue()`.
-- **Action Flow**:
-  - Validate form fields.
-  - If valid, dispatch task creation to Vuex / backend.
-  - Show quick success notification.
-  - Retain `formData.project` and `formData.assignee`.
-  - Clear `formData.description = ''`, `formData.customCommand = ''`, `formData.due = ''`, `formData.until = ''`, `formData.scheduled = ''`, `formData.wait = ''`, `formData.recur = ''`, `formData.annotations = []`, `formData.depends = []`, `formData.dependents = []`.
-  - Reset form validation states and re-focus the `Description` input field.
-
-### 3. #47 Date & Time Pickers (`TaskDialog.vue`)
-- **Component Design**:
-  - For each date field (`due`, `until`, `scheduled`, `wait`), add an append icon `mdi-calendar-clock` to the `v-text-field`.
-  - Clicking the icon opens a `v-menu` with a `v-date-picker` (and optional time selection tab/toggle).
-  - Selecting a date automatically formats it into `YYYY-MM-DD` (or `YYYY-MM-DDTHH:mm:ss`) and updates the text field model.
-  - Direct typing remains fully operational for Taskwarrior shorthand (`tomorrow`, `eod`, etc.).
-
-### 4. #74 & #22 Remember Table Sorting & Options (`TaskList.vue`)
-- **Options Persistence**:
-  - Bind `v-data-table` `:options.sync="tableOptions"`.
-  - Initialize `tableOptions` from `localStorage.getItem('taskListOptions')` if present, with defaults (`sortBy: ['urgency']`, `sortDesc: [true]`, `itemsPerPage: 10`).
-  - Watch `tableOptions` (deep) and save changes to `localStorage.setItem('taskListOptions', JSON.stringify(val))`.
-
----
+### 4. Sub-Projects Hierarchical Filtering (#43)
+- **Filter State & Logic (`frontend/pages/index.vue`, `frontend/components/TaskList.vue`)**:
+  - Add `includeSubprojects` boolean ref/state in `pages/index.vue` and `TaskList.vue`.
+  - Add a toggle switch `v-switch` or button next to Project filter: "Include subprojects".
+  - In `filteredTasks`:
+    - When `includeSubprojects` is true and `selectedProject` is set:
+      `t.project === selectedProject || (t.project && t.project.startsWith(selectedProject + '.'))`
+    - When `includeSubprojects` is false:
+      `t.project === selectedProject`
+  - Sync `includeSubprojects` with route query `?subprojects=1` for URL persistence and sharing.
 
 ## Verification Strategy
-1. **#51 Verification**: Filter by a project and assignee in the top controls, click "New Task", and verify both fields are pre-filled. Clear filters and verify Assignee falls back to `settings.assigneeName`.
-2. **#77 Verification**: In New Task dialog, type description, press `Ctrl+Enter`. Verify task is saved and dialog stays open with Description cleared, Project/Assignee retained, and cursor focused in Description.
-3. **#47 Verification**: Open date picker menu on Due date, pick a day, verify date string is populated into the field. Type relative date `tomorrow` directly, verify field accepts it.
-4. **#74 & #22 Verification**: Change sorting to Description descending and items-per-page to 25. Refresh page, verify table retains Description descending and 25 items per page.
+- Run unit/typecheck tests on backend: `npm run build` in `backend/`.
+- Run Nuxt build on frontend: `npm run build` in `frontend/`.
+- Verify port and base path variables (`PORT=8080`, `ROUTER_BASE_PATH=/tasks`).
+- Verify multi-profile retrieval and context endpoints via backend routing tests.
+- Verify subproject filtering logic with tasks belonging to `project:work` and `project:work.subproject`.

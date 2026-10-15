@@ -1,99 +1,40 @@
-# Tasks: Phase 2 UI Improvements & UX Polish
+# Implementation Tasks - Phase 3: Configurations & Architecture
 
-**Input**: Design documents from `speckit.specify` and `speckit.plan`
-**Target Branch**: `phase2-ui-improvements` (`/home/pplupo/repos/webui2`)
-**Prerequisites**: speckit.plan (required), speckit.specify (required)
+## Task List
 
-## Format: `[ID] [P?] [Story] Description`
-- **[P]**: Can run in parallel (different files/modules, no direct dependencies)
-- **[Story]**: Target user story / feature (US1: #51 Pre-fill Project & Assignee, US2: #77 Bulk Add Mode, US3: #47 Date & Time Pickers, US4: #74 & #22 Remember Sorting & Options)
+- [x] Task 1: Configurable Port Support (#92)
+  - [x] 1.1 Support `PORT` (and `APP_PORT`) env variable in `backend/src/app.ts` (default 3000)
+  - [x] 1.2 Support `PORT` env variable in `docker/start.sh` and `nginx/server.conf` template (default 80)
+  - [x] 1.3 Verify custom port binding in backend and Docker startup
 
----
+- [x] Task 2: Reverse Proxy Base Path Support (#88)
+  - [x] 2.1 Configure `router.base` and Axios `baseURL` in `frontend/nuxt.config.js` via `ROUTER_BASE_PATH` (default `/`)
+  - [x] 2.2 Configure Koa routes in `backend/src/app.ts` to mount under `ROUTER_BASE_PATH`
+  - [x] 2.3 Update Nginx reverse proxy configuration in `nginx/server.conf` and `docker/start.sh` to route prefix requests
+  - [x] 2.4 Verify asset loading and API calls under custom base path
 
-## Phase 1: Setup & Foundational Prerequisites
+- [x] Task 3: Multi-Profile Support (#96)
+  - [x] 3.1 Implement profile manager and cache in `backend/src/profiles.ts` supporting `TASK_PROFILES`
+  - [x] 3.2 Update `backend/src/taskwarrior.ts` and route handlers to resolve profile from `X-Taskwarrior-Profile` header or query
+  - [x] 3.3 Add `GET /config/profiles` endpoint in backend
+  - [x] 3.4 Add profile state in Vuex store (`frontend/store/index.ts`) and Axios interceptor for `X-Taskwarrior-Profile`
+  - [x] 3.5 Add Profile switcher component/menu in `frontend/layouts/default.vue`
+  - [x] 3.6 Verify switching between profiles reloads tasks and queries with correct `TASKRC`/`TASKDATA`
 
-**Purpose**: Baseline verification of branch and component entry points
+- [x] Task 4: Taskwarrior Contexts Support (#18)
+  - [x] 4.1 Implement `backend/src/contexts.ts` with `GET /config/contexts` (`task _context`, `task _get rc.context`) and `POST /config/contexts`
+  - [x] 4.2 Support `X-Taskwarrior-Context` header in backend CLI executions for request-level context override
+  - [x] 4.3 Add context state and actions in Vuex store (`frontend/store/index.ts`)
+  - [x] 4.4 Add Context switcher menu/badge in `frontend/layouts/default.vue`
+  - [x] 4.5 Verify listing, switching, and clearing active context in UI
 
-- [x] T001 Verify clean test environment and target components in `frontend/`.
+- [x] Task 5: Sub-projects Hierarchical Filtering (#43)
+  - [x] 5.1 Add "Include subprojects" toggle in `frontend/pages/index.vue`
+  - [x] 5.2 Implement hierarchical matching in `filteredTasks` (`task.project === selected || task.project.startsWith(selected + '.')`)
+  - [x] 5.3 Persist subproject toggle state in URL query `?subprojects=1`
+  - [x] 5.4 Ensure hierarchical filtering applies consistently across Tasks, Kanban, and Gantt views
 
----
-
-## Phase 2: User Story 1 - Pre-fill Project & Assignee on New Task (Priority: P1) 🎯 MVP
-
-**Goal**: Automatically populate Project and Assignee in TaskDialog based on active view filters and user settings fallback (#51).
-**Independent Test**: Filter by a project and assignee in the UI and open the New Task dialog; verify Project and Assignee are pre-filled. Clear filters and verify Assignee pre-fills from `settings.assigneeName`.
-
-### Implementation Tasks
-- [x] T002 [P] [US1] Add `initialProject` and `initialAssignee` props to `frontend/components/TaskDialog.vue` and update form initialization to respect them with fallback to `store.state.settings.assigneeName`.
-- [x] T003 [US1] Update `frontend/pages/index.vue` to compute active project and assignee and pass them to `TaskDialog`.
-- [x] T004 [US1] Update `newTask` trigger in `frontend/components/TaskList.vue` to preserve active filter context.
-
----
-
-## Phase 3: User Story 2 - Bulk Add (Brain Dump Mode) (Priority: P1) 🎯 MVP
-
-**Goal**: Support `Ctrl+Enter` / `Cmd+Enter` inside TaskDialog to save and immediately prepare the dialog for consecutive task entry (#77).
-**Independent Test**: Open New Task dialog, fill Description and dates, press `Ctrl+Enter`; verify task is saved, Description/annotations are cleared, Project/Assignee are retained, and cursor refocuses on Description.
-
-### Implementation Tasks
-- [x] T005 [US2] Implement `saveAndContinue` method in `frontend/components/TaskDialog.vue` to validate, dispatch task creation, retain Project/Assignee, reset other fields, and retain focus.
-- [x] T006 [US2] Add keyboard shortcut listener for `(e.ctrlKey || e.metaKey) && e.key === 'Enter'` in `frontend/components/TaskDialog.vue` to trigger `saveAndContinue`.
-
----
-
-## Phase 4: User Story 3 - Date & Time Pickers for Task Dates (Priority: P2)
-
-**Goal**: Add append-icon date and time picker menus to date inputs in TaskDialog while keeping text inputs operational (#47).
-**Independent Test**: Open TaskDialog, click the calendar icon beside `due`, pick a date from the picker, and verify the formatted date string is populated into the field. Type `tomorrow` into `scheduled` directly and verify text entry works without obstruction.
-
-### Implementation Tasks
-- [x] T007 [P] [US3] Create date/time picker menu popups (`v-menu` with `v-date-picker`) on `due`, `until`, `scheduled`, and `wait` fields in `frontend/components/TaskDialog.vue`.
-- [x] T008 [US3] Format selected dates from picker into `YYYY-MM-DD` and wire reactivity back to `formData`.
-
----
-
-## Phase 5: User Story 4 - Remember Sorting Order & Frontend Preferences (Priority: P2)
-
-**Goal**: Persist table sorting order, sort direction, and rows per page across page reloads via `localStorage` (#74, #22).
-**Independent Test**: In TaskList view, change table sorting to Priority descending and items per page to 25. Refresh the browser; verify table options are restored from `localStorage`.
-
-### Implementation Tasks
-- [x] T009 [P] [US4] Bind `:options.sync="tableOptions"` on `v-data-table` in `frontend/components/TaskList.vue`.
-- [x] T010 [US4] Add `localStorage` loading on mount and reactive watcher to save `tableOptions` (`sortBy`, `sortDesc`, `itemsPerPage`).
-
----
-
-## Phase 6: Polish & Cross-Cutting Verification
-
-**Purpose**: End-to-end integration and smoke verification across all updated components
-
-- [x] T011 Run frontend build and linter checks (`npm run build`).
-- [x] T012 Verify complete Phase 2 user journeys: pre-fill, bulk add loop, date pickers, and persistent sorting.
-
----
-
-## Dependencies & Execution Graph
-
-```mermaid
-flowchart TD
-    T001[T001: Environment Check] --> T002[T002: TaskDialog Props]
-    T001 --> T007[T007: Date Picker Popups]
-    T001 --> T009[T009: Table Options Binding]
-
-    T002 --> T003[T003: index.vue Pre-fill Wiring]
-    T002 --> T004[T004: TaskList Pre-fill Wiring]
-    T002 --> T005[T005: Bulk Add Method]
-
-    T005 --> T006[T006: Ctrl+Enter Listener]
-
-    T007 --> T008[T008: Date Formatting & Sync]
-
-    T009 --> T010[T010: localStorage Persistence]
-
-    T003 --> T011[T011: Build & Lint Checks]
-    T004 --> T011
-    T006 --> T011
-    T008 --> T011
-    T010 --> T011
-    T011 --> T012[T012: Final E2E Verification]
-```
+- [x] Task 6: Final Integration and Build Verification
+  - [x] 6.1 Run TypeScript typechecks and backend build (`cd backend && npm run build`)
+  - [x] 6.2 Run frontend build (`cd frontend && npm run build`)
+  - [x] 6.3 Test simultaneous combination of context, profile, and subproject filters

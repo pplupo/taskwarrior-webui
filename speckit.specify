@@ -1,36 +1,49 @@
-# Specification - Phase 2: UI Improvements & UX Polish
+# Specification - Phase 3: Configurations & Architecture
 
 ## Requirements
 
-Implement core Taskwarrior WebUI UX improvements:
+Implement architectural, deployment configuration, and advanced Taskwarrior feature requests from the repository issues:
 
-1. **#51 Pre-fill Project and Assignee on New Task**:
-   - When the user is viewing a filtered project in the UI and clicks to add a new task, the "Project" field in the task creation dialog must be pre-filled with the active project (ignoring `(All Projects)` and `(No Project)`).
-   - When an assignee filter is active (ignoring `(All Assignees)` and `(Unassigned)`), pre-fill the "Assignee" field in the new task modal with the filtered assignee.
-   - Fallback: If no specific assignee filter is active, pre-fill Assignee from the default `assigneeName` configured in user Settings (`store.state.settings.assigneeName`), if present.
+1. **#88 Reverse Proxy Base Path Support**:
+   - Allow serving taskwarrior-webui under a URL subpath (e.g. `/tasks`) behind reverse proxies (Apache, Nginx, Traefik).
+   - Configure Nuxt `router.base` and Axios `baseURL` driven by environment variable `ROUTER_BASE_PATH` (default `/`).
+   - Support `ROUTER_BASE_PATH` in Koa backend API routes (mount routes at `${ROUTER_BASE_PATH}api` as well as root `/api` or dynamically prefixing) and Docker Nginx configuration template/script.
 
-2. **#77 Bulk Add (Brain Dump Mode)**:
-   - Streamline rapid successive task entry inside the "Add Task" modal.
-   - Support keyboard shortcut `Ctrl+Enter` (or `Cmd+Enter` on macOS) to save the current task immediately and keep the modal open with focus returned to the Description field for the next entry.
-   - In Bulk Add mode, retain the currently selected `Project` and `Assignee` across successive entries, while resetting `Description`, `customCommand`, `annotations`, `depends`, and dates.
-   - Standard `Enter` (or clicking "Save") saves the task and closes the dialog.
+2. **#92 Configurable Port**:
+   - Make server listening ports configurable via `PORT` environment variable:
+     - Koa backend: listen on `process.env.PORT || 3000` (or `APP_PORT`).
+     - Docker Nginx: template or substitute `PORT` (default 80) in `server.conf` during `/start.sh`.
 
-3. **#47 Date & Time Pickers for Task Dates**:
-   - Integrate Vuetify date & time picker popups / menus (`v-date-picker` / `v-time-picker`) beside date fields (`due`, `until`, `scheduled`, `wait`) triggered by calendar/clock append icons.
-   - Preserve direct text editing so users can still type relative Taskwarrior date strings (e.g. `tomorrow`, `eod`, `friday`, `2d`).
+3. **#18 Taskwarrior Contexts Support (`task context`)**:
+   - Add backend API endpoints:
+     - `GET /config/contexts`: returns list of available contexts (`task _context`) and the current active context (`task _get rc.context`).
+     - `POST /config/contexts`: sets or clears active context.
+   - Dual-mode context support:
+     - Persistent / global change via `POST /config/contexts` (`task context <name>` / `task context none`).
+     - Request-level override via header `X-Taskwarrior-Context` (which injects `rc.context=<name>` into CLI commands), allowing isolated sessions or multi-client control.
+   - UI context selector:
+     - Display a dropdown/menu in the top app bar next to the title or command bar.
+     - Allows selecting `none` or any defined context, persisting selection in local state and notifying the backend.
 
-4. **#74 & #22 Remember Sorting Order & Frontend Preferences**:
-   - Persist user frontend table options across page reloads using `localStorage`.
-   - Store table sorting options (sort column `sortBy`, sort descending `sortDesc`, and rows per page `itemsPerPage`).
-   - Restore table options seamlessly on page load without layout shift or UI flickering.
+4. **#43 Sub-projects Display in Project View**:
+   - Support both exact match and hierarchical sub-project matching:
+     - Add an "Include subprojects" toggle switch or checkbox in the filter bar (next to the Project selector in `pages/index.vue`).
+     - When enabled, if `selectedProject` is `work`, matching tasks include `work` and any `work.<child>` (`task.project === selectedProject || task.project.startsWith(selectedProject + '.')`).
+     - When disabled (or default), exact project match behavior is preserved.
+     - Also support selecting hierarchical projects in `TaskList.vue`, `KanbanBoard.vue`, and `GanttChart.vue`.
 
-## Clarifications & Decisions
-- **Date/Time Picker Integration (#47)**: Keep text fields for direct input, and add an icon button on each date input to open a `v-menu` with date/time pickers that formats the selected date into the field.
-- **Bulk Add State Retention (#77)**: On `Ctrl+Enter`, save the task, clear Description and annotations, but keep Project and Assignee populated for fast entry under the same context.
-- **Pre-fill Fallback (#51)**: Active filter takes precedence. If no filter is active, Assignee falls back to `settings.assigneeName`.
+5. **#96 Multiple `.taskrc` / `.task` Profiles with UI Selector**:
+   - Backend profile configuration:
+     - Supported via environment variable `TASK_PROFILES` with JSON or key-value format (e.g., `Default:~/.taskrc:~/.task,Work:~/.taskrc.work:~/.task.work` or `{"Work": {"taskrc": "~/.taskrc.work", "taskdata": "~/.task.work"}}`), defaulting to a single `Default` profile with `process.env.TASKRC` and `process.env.TASKDATA`.
+     - Endpoints: `GET /config/profiles` returning available profile names.
+   - Multi-profile routing:
+     - Client passes active profile via header `X-Taskwarrior-Profile: <profile_name>`.
+     - Backend routes TaskwarriorLib calls using the corresponding `TASKRC` and `TASKDATA` paths for that profile.
+   - Frontend UI:
+     - If more than 1 profile is configured, show a profile switcher in the top bar (or combined profile/context menu).
+     - Persist selected profile in localStorage and attach `X-Taskwarrior-Profile` to Axios requests.
 
 ## User Stories
-- As a user entering tasks under a specific project and assignee, I want those fields automatically pre-filled so I don't have to retype them repeatedly.
-- As a user doing a brain dump of multiple tasks, I want to press `Ctrl+Enter` to rapidly submit task after task without having to reopen the dialog each time.
-- As a user scheduling deadlines, I want visual date/time pickers to select dates accurately while still having the freedom to type relative date shortcuts.
-- As a user who customized column sorting and page sizes, I want those preferences remembered across browser sessions.
+- As a self-hoster running a reverse proxy, I want to host Taskwarrior WebUI at a custom sub-path (e.g. `/tasks`) and custom port so that it fits into my existing reverse proxy routing rules.
+- As a user with multiple contexts or multiple profiles, I want to switch contexts and profiles directly from the WebUI without touching configuration files or running multiple server instances.
+- As a user organizing tasks with nested projects (`parent.child`), I want to see tasks in sub-projects when selecting the parent project via a toggle switch.
