@@ -5,25 +5,32 @@
 Implement core Taskwarrior WebUI UX improvements:
 
 1. **#51 Pre-fill Project and Assignee on New Task**:
-   - When the user is viewing a filtered project in the UI and clicks to add a new task, the "Project" field in the task creation dialog must be pre-filled with the active project.
-   - When an assignee filter is active or available, pre-fill the "Assignee" field in the new task modal accordingly.
+   - When the user is viewing a filtered project in the UI and clicks to add a new task, the "Project" field in the task creation dialog must be pre-filled with the active project (ignoring `(All Projects)` and `(No Project)`).
+   - When an assignee filter is active (ignoring `(All Assignees)` and `(Unassigned)`), pre-fill the "Assignee" field in the new task modal with the filtered assignee.
+   - Fallback: If no specific assignee filter is active, pre-fill Assignee from the default `assigneeName` configured in user Settings (`store.state.settings.assigneeName`), if present.
 
 2. **#77 Bulk Add (Brain Dump Mode)**:
    - Streamline rapid successive task entry inside the "Add Task" modal.
-   - Support keyboard shortcut `Ctrl+Enter` (or `Cmd+Enter` on macOS) to save the current task immediately and keep the modal open with description cleared and focus retained for the next entry.
-   - Standard `Enter` or clicking "Save" adds the task and closes the modal as usual.
+   - Support keyboard shortcut `Ctrl+Enter` (or `Cmd+Enter` on macOS) to save the current task immediately and keep the modal open with focus returned to the Description field for the next entry.
+   - In Bulk Add mode, retain the currently selected `Project` and `Assignee` across successive entries, while resetting `Description`, `customCommand`, `annotations`, `depends`, and dates.
+   - Standard `Enter` (or clicking "Save") saves the task and closes the dialog.
 
 3. **#47 Date & Time Pickers for Task Dates**:
-   - Integrate Vuetify date and time picker components (`v-date-picker` / `v-time-picker`) into task creation and edit dialogs for `due`, `wait`, and `scheduled` fields.
-   - Maintain compatibility with textual relative expressions or quick buttons (e.g. today, tomorrow, eow).
+   - Integrate Vuetify date & time picker popups / menus (`v-date-picker` / `v-time-picker`) beside date fields (`due`, `until`, `scheduled`, `wait`) triggered by calendar/clock append icons.
+   - Preserve direct text editing so users can still type relative Taskwarrior date strings (e.g. `tomorrow`, `eod`, `friday`, `2d`).
 
 4. **#74 & #22 Remember Sorting Order & Frontend Preferences**:
-   - Persist user frontend preferences across page reloads using `localStorage`.
-   - Store table sorting options (sort column, sort direction, items per page).
-   - Ensure defaults are smoothly restored without layout jumping or state desync.
+   - Persist user frontend table options across page reloads using `localStorage`.
+   - Store table sorting options (sort column `sortBy`, sort descending `sortDesc`, and rows per page `itemsPerPage`).
+   - Restore table options seamlessly on page load without layout shift or UI flickering.
+
+## Clarifications & Decisions
+- **Date/Time Picker Integration (#47)**: Keep text fields for direct input, and add an icon button on each date input to open a `v-menu` with date/time pickers that formats the selected date into the field.
+- **Bulk Add State Retention (#77)**: On `Ctrl+Enter`, save the task, clear Description and annotations, but keep Project and Assignee populated for fast entry under the same context.
+- **Pre-fill Fallback (#51)**: Active filter takes precedence. If no filter is active, Assignee falls back to `settings.assigneeName`.
 
 ## User Stories
 - As a user entering tasks under a specific project and assignee, I want those fields automatically pre-filled so I don't have to retype them repeatedly.
 - As a user doing a brain dump of multiple tasks, I want to press `Ctrl+Enter` to rapidly submit task after task without having to reopen the dialog each time.
-- As a user scheduling deadlines, I want visual date/time pickers to select dates accurately without manual text formatting.
-- As a user who customized column sorting and page sizes, I want those preferences remembered when I refresh or revisit the page.
+- As a user scheduling deadlines, I want visual date/time pickers to select dates accurately while still having the freedom to type relative date shortcuts.
+- As a user who customized column sorting and page sizes, I want those preferences remembered across browser sessions.
