@@ -1,31 +1,81 @@
-# Implementation Plan - Taskwarrior WebUI Enhancement
+# Implementation Plan - Phase 1: Bug Fixes & Stability
 
-## Architecture & Tech Stack
-- **Target Fork**: https://github.com/pplupo/taskwarrior-webui
-- **Backend**: Node.js, Koa.js, TypeScript, taskwarrior-lib CLI wrapper.
-- **Frontend**: Vue 2 (Composition API), Nuxt.js, Vuetify (Material Design), Vuex (typed-vuex).
+**Branch**: `phase1-bug-fixes` | **Date**: 2026-10-14 | **Spec**: [speckit.specify](file:///home/pplupo/repos/webui2/speckit.specify)
 
-## Proposed Architectural Modules
+## Summary
+Resolve four core stability and usability issues identified from open bug reports:
+1. **#72 Fix URL Parsing Crash**: Prevent `TypeError: URL constructor: http:... is not a valid URL` when parsing task descriptions containing double colons (`::`) or malformed URL tokens in `TaskList.vue` and `KanbanCard.vue`.
+2. **#89 Completed Projects in Selector**: Group 100% completed projects at the bottom of the project selector below a divider, and provide a user setting in `SettingsDialog.vue` to optionally hide them entirely.
+3. **#59 Theme Include & CLI Data Fetching Robustness**: Ensure `taskwarrior-lib` execution in the Koa backend overrides formatting flags (`rc._forcecolor=off`, `rc.defaultwidth=0`) so theme directives or ANSI color codes never corrupt JSON parsing.
+4. **#90 Prevent Mobile (iOS) Input Offset**: Ensure form input containers in `TaskDialog.vue` maintain consistent layout during error state transitions to prevent WebKit virtual keyboard cursor/scroll offset desynchronization.
 
-### 1. Backend Extensions (`backend/src/`)
-- `GET /api/tasks/active`: Query active task status.
-- `POST /api/tasks/:uuid/start` & `POST /api/tasks/:uuid/stop`: Direct timer management.
-- `POST /api/tasks/:uuid/annotate` & `DELETE /api/tasks/:uuid/annotate`: Annotation management.
-- `POST /api/tasks/undo` & `GET /api/tasks/undo/preview`: Undo operations preview and execution.
-- `GET /api/config/queries`: Custom queries loader.
-- `GET /api/reports/burndown` & `GET /api/reports/projects`: Progress metrics.
+---
 
-### 2. Frontend Components & Store (`frontend/`)
-- Store additions: `activeTask`, `customQueries`, `undoPreview`, `activeViewMode`, `mnemonicsMap`.
-- Keyboard & Mnemonic Engine (`plugins/hotkeys.ts`): Shortcut handlers (`Ctrl+Shift+K`, `n`, `t`, `q`, `u`, `s`) with visual red-box overlays.
-- Kanban View (`components/KanbanBoard.vue`, `components/KanbanCard.vue`): 4-column drag-and-drop layout (To Do, In Progress, Waiting, Done).
-- Widgets (`components/ActiveTaskBar.vue`, `components/UndoDialog.vue`, `components/CustomQueryBar.vue`, `components/ReportsView.vue`).
-- Global Controls & Live Search (`pages/index.vue`): Top-bar search text field with 300ms debounced `?search=` synchronization, view switcher (`mode`), project and assignee filtering applied to `filteredTasks`.
-- Multi-Toggle Task List (`components/TaskList.vue`): Independent status button toggles (`v-btn-toggle multiple`), aggregated task display (`displayedTasks`), dynamic column headers (`Due`, `Wait`, `Recur`), and `?status=` query parameter synchronization (preserved across view mode transitions and strictly ignored by Kanban view).
-- Gantt & Timeline Engine (`components/GanttChart.vue`): Start/due date resolution, priority/urgency vertical sorting (with deleted tasks positioned last), non-intersecting orthogonal SVG arrows, fluid Day/Week/Month horizontal scrolling, Calendarless topological flow view, unified top-bar live search integration, and reused multi-toggle status button group synchronizing with `?status=` query parameter.
+## Technical Context
+- **Backend**: Node.js, Koa.js, TypeScript, `taskwarrior-lib`.
+- **Frontend**: Vue 2, Nuxt.js (`@nuxtjs/composition-api`), Vuetify 2, `url-regex-safe`, `normalize-url`.
+- **Testing/Verification**: Unit checks, manual testing with sample task payloads (e.g. `Doug:: double-check re: Thursday meeting`, 100% completed project hierarchies, theme includes in `.taskrc`).
+
+---
+
+## Constitution Check
+- [x] **Preserve Compatibility**: CLI invocation arguments maintain compatibility with Taskwarrior 2.x and 3.x.
+- [x] **Keyboard-First & High Accessibility**: Selector options and dialog focus are preserved.
+- [x] **Robust State Synchronization**: Safe normalization of URLs avoids frontend crashes; color overrides guarantee clean JSON from Taskwarrior.
+- [x] **Clean Vue 2 / Composition API Patterns**: Settings and project groupings utilize Vuex state and computed properties cleanly.
+
+---
+
+## Detailed Implementation Modules
+
+### 1. #72 Fix URL Parsing Crash (`frontend/components/TaskList.vue` & `frontend/components/KanbanCard.vue`)
+- **Current Defect**:
+  `linkify()` runs `urlRegex()` and calls `normalizeUrl(match[0])`. For strings like `"Doug:: double-check"`, regex matches `Doug::` as a pseudo-URL scheme, and `new URL('http:Doug::')` or `normalizeUrl` throws `TypeError: URL constructor: http:Doug:: is not a valid URL`, breaking table/list rendering and pagination.
+- **Implementation**:
+  - Restrict URL matching to valid web schemes (`http://`, `https://`, `ftp://`) or require standard domain delimiters.
+  - Wrap `normalizeUrl` and URL construction with a robust validator: only linkify if the URL constructor succeeds and parses a valid hostname/protocol.
+  - Fall back gracefully to plain text rather than corrupting the DOM or throwing uncaught exceptions.
+
+### 2. #89 Completed Projects Separation & Toggle (`frontend/store/index.ts`, `frontend/pages/index.vue`, `frontend/components/SettingsDialog.vue`)
+- **Current Defect**:
+  Projects where all tasks are completed appear mixed in the project selector dropdown alongside active projects.
+- **Implementation**:
+  - In Vuex `store/index.ts` / getters, compute project completion status:
+    - `activeProjects`: projects having at least one task with `status: 'pending'` or `'waiting'`.
+    - `completedProjects`: projects where all associated tasks have `status: 'completed'` (or `'deleted'`).
+  - In `frontend/components/SettingsDialog.vue`:
+    - Add setting `hideCompletedProjects: boolean` (persisted in settings / `localStorage`).
+  - In `frontend/pages/index.vue` (`projectOptions`):
+    - When `hideCompletedProjects` is false:
+      - Return `['(All Projects)', '(No Project)', ...activeProjects, { divider: true }, ...completedProjects]`.
+    - When `hideCompletedProjects` is true:
+      - Return `['(All Projects)', '(No Project)', ...activeProjects]`.
+    - Ensure Vuetify `v-select` renders dividers properly using `item-text` / item objects or standard separator syntax.
+
+### 3. #59 CLI Data Fetching & Theme Robustness (`backend/src/taskwarrior.ts` & `backend/src/tasks.ts`)
+- **Current Defect**:
+  When `.taskrc` includes a color theme (`include /path/to/theme.rc`), Taskwarrior may emit ANSI escape sequences or localized formatting that breaks `taskwarrior-lib`'s JSON parsing of task exports.
+- **Implementation**:
+  - Ensure Taskwarrior commands in `backend/src/` enforce `rc._forcecolor=off` and `rc.defaultwidth=0` when exporting tasks or querying JSON.
+  - Provide safe error handling in the API if CLI fails due to missing include files, returning a structured JSON error instead of crashing the Koa server.
+
+### 4. #90 iOS Mobile Input Offset on Error (`frontend/components/TaskDialog.vue`)
+- **Current Defect**:
+  On mobile WebKit/iOS, triggering an error message expands the height of `v-text-field`, shifting input boundaries while the native soft keyboard viewport remains fixed, disconnecting touch target coordinates from visual cursor position.
+- **Implementation**:
+  - Set `hide-details="auto"` or wrap inputs in fixed-reserve layout containers to prevent layout jump on validation failure.
+  - Ensure touch events and autofocus scroll behavior preserve field alignment.
+
+---
 
 ## Verification Strategy
-- Backend API integration testing for timer and undo endpoints.
-- Component rendering tests for Kanban board drag-and-drop.
-- Headless browser automated tests (via Marionette/WebDriver) for query parameter synchronization (`search`, `status`, `mode`, `project`, `assignee`) and live filter-as-you-type reactivity.
-- E2E keyboard shortcut validation.
+1. **#72 Verification**:
+   - Add tasks with double colons (e.g. `Doug:: double-check re: Thursday meeting`, `test::value`, `http://valid.com/test`) and verify list rendering, pagination, Kanban view, and links without exceptions.
+2. **#89 Verification**:
+   - Create a project with only completed tasks.
+   - Verify it appears at the bottom under a divider in the dropdown.
+   - Toggle "Hide completed projects" in Settings and verify it disappears immediately.
+3. **#59 Verification**:
+   - Verify backend exports tasks cleanly when color themes are configured or simulated with `rc._forcecolor=on`.
+4. **#90 Verification**:
+   - Test `TaskDialog` validation error trigger on narrow viewports/mobile emulation and verify layout stability.
