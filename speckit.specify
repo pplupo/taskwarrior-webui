@@ -6,11 +6,13 @@ Implement high-priority bug fixes and stability improvements:
 
 1. **#72 Fix URL Parsing Crash on Double Colon / Complex Titles**:
    - Tasks containing double colons (e.g. `Doug:: double-check re: Thursday meeting`) or colon-delimited text crash list views with `TypeError: URL constructor: http:Doug:: is not a valid URL`.
-   - Ensure title linkification / URL detection safely validates URLs before calling URL constructors, properly isolating URLs with schema prefixes (`http://`, `https://`) and handling colon delimiters gracefully without throwing exceptions.
+   - Safely validate URLs before calling URL constructors: match URLs with explicit schemes (`http://`, `https://`, `ftp://`) and `www.*` domain patterns, ignoring stray colons or custom pseudo-schemes like `Doug::`.
+   - Wrap parsing in a defensive validation helper that catches URL constructor failures and safely falls back to plain text.
 
 2. **#89 Handle 100% Completed Projects in Selector**:
-   - In the project selector dropdown, place 100% completed projects at the end of the list separated by a clear visual divider / separator.
-   - Add a setting / checkbox in the user settings to completely hide 100% completed projects from the project selector.
+   - Qualify a project as completed/inactive when 100% of tasks in that project have status `completed` (or all tasks are `completed`/`deleted` with no `pending` or `waiting` tasks remaining).
+   - In the project selector dropdown, place completed projects at the end of the list separated by a clear visual divider / separator.
+   - Add a setting / checkbox in `SettingsDialog.vue` to hide completed projects from the project selector, with **default value set to `true`** (hidden by default unless toggled off).
 
 3. **#59 Theme Include & CLI Data Fetching Robustness**:
    - Address failures where Taskwarrior configurations with theme includes or output formatting disrupt JSON data fetching.
@@ -20,8 +22,13 @@ Implement high-priority bug fixes and stability improvements:
    - Fix issue where mobile (iOS WebKit) virtual keyboard and input cursor become disconnected / offset after field validation errors.
    - Adjust input validation layout and container properties (e.g. `hide-details="auto"` or stable input slot dimensions) so viewport scroll re-calculation preserves correct cursor/focus alignment.
 
+## Clarifications & Decisions
+- **Project Completion Criteria (#89)**: A project is completed when all its tasks have status `completed` or `deleted` (no active `pending` or `waiting` tasks).
+- **Default Setting (#89)**: "Hide completed projects" defaults to `true`. When disabled by user, completed projects appear under a separator at the bottom of the list.
+- **Linkification Pattern (#72)**: Only match URLs with explicit schemes (`http://`, `https://`, `ftp://`) or standard `www.*` hostnames. Non-URL colons (`::`) must never be treated as URL schemes.
+
 ## User Stories
 - As a user with task titles containing colons, double colons, or notes, I want the task list to render without crashing on URL parsing.
-- As a user managing many completed projects, I want completed projects grouped below a divider in the project selector and the ability to hide them via a setting so the dropdown remains clean.
+- As a user managing many completed projects, I want completed projects hidden by default, or grouped below a divider in the project selector when toggled visible in settings.
 - As a user with themes or customized `.taskrc` configurations, I want the web interface to reliably fetch and parse task data without JSON decoding errors.
 - As a mobile user on iOS, I want input fields to remain aligned with the cursor even after validation errors occur.
